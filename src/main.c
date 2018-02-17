@@ -1,12 +1,13 @@
 #include <io.h>
+#include <string.h>
+#include <stdio.h>
 
 void hyper_main(int magic, int info_addr)
 {
 	(void)magic;
 	(void)info_addr;
-	outb(0x3f8, 'O');
-	outb(0x3f8, 'K');
-	outb(0x3f8, '\n');
+
+	printf("Hello Bitz !\n");
 
 	char *buf = (void *)0xb8000;
 	char *star = "|/-\\"; 
