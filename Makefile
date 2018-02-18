@@ -4,9 +4,11 @@ GRUB_CFG = grub_default.cfg
 ISO = hyper.iso
 
 INCLUDE_DIR = include/
-OBJS = src/boot.o \
-       src/main.o \
-       src/write.o
+OBJS = src/boot.o 	\
+       src/main.o	\
+       src/write.o	\
+       src/isr.o	\
+       src/interrupts.o \
 
 LIBC_DIR=src/libc
 LIBC_OBJS=$(LIBC_DIR)/printf.o \
@@ -17,7 +19,7 @@ LIBC_OBJS=$(LIBC_DIR)/printf.o \
 CC=gcc
 CPPFLAGS += -I$(INCLUDE_DIR) -I$(LIBC_DIR)/include
 CFLAGS = -Wall -Wextra -Werror -std=gnu99 -g3 -fno-stack-protector \
-	 -fno-builtin -ffreestanding
+	 -fno-builtin -ffreestanding -Wno-pointer-to-int-cast
 
 ASFLAGS += -g3
 LDFLAGS = -n -T $(LDSCRIPT) -nostdlib
@@ -31,6 +33,9 @@ iso: $(ISO)
 
 run: $(ISO)
 	qemu-system-x86_64 -cdrom $(ISO) -enable-kvm -serial stdio
+
+debug: $(ISO)
+	qemu-system-x86_64 -cdrom $(ISO) -serial stdio -s -S
 
 $(ISO): $(OUT_DIR) $(KERNEL) 
 	mkdir -p $(OUT_DIR)/iso/boot/grub
