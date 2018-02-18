@@ -75,7 +75,7 @@ static int add_gate(const u16 irq, u64 handler, u8 ist, u8 flags)
 static void default_irq_handler(struct irq_frame *frame)
 {
 	if (frame->irq < 20)
-		printf("Interrupt: %s\n", exceptions_str[frame->irq]);
+		printf("Interrupt: %s Exception\n", exceptions_str[frame->irq]);
 	printf("Halting ...\n");
 	for (;;)
 		asm volatile ("hlt");
@@ -85,7 +85,6 @@ extern void isr_stub_0(void);
 int init_idt(void)
 {
 	u32 start = (u32)isr_stub_0 & 0xffffffff;
-	printf("start: %#x\n", start);
 
 	for (u16 i = 0; i < NR_INTERRUPTS; ++i) {
 		interrupt_handlers[i] = default_irq_handler;
