@@ -1,6 +1,6 @@
 #include <asm.h>
 	.section .text
-.macro ISR_STUB nb has_error_code=1
+.macro ISR_STUB nb has_error_code=0
 .align 16
 .global isr_stub_\nb
 isr_stub_\nb:
