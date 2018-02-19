@@ -35,9 +35,6 @@ static void *get_multiboot_infos(u32 info_addr, u8 tag_type)
 
 void hyper_main(u32 magic, u32 info_addr)
 {
-	(void)magic;
-	(void)info_addr;
-
 	if (!multiboot2_valid(magic, info_addr))
 		return;
 
