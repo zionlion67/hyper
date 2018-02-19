@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <multiboot2.h>
 
-int multiboot2_valid(u32 magic, u32 info_addr)
+static int multiboot2_valid(u32 magic, u32 info_addr)
 {
 	if (magic != MULTIBOOT2_BOOTLOADER_MAGIC) {
 		printf("Please use a multiboot2 compliant bootloader\n");
@@ -20,7 +20,7 @@ int multiboot2_valid(u32 magic, u32 info_addr)
 	return 1;
 }
 
-void *get_multiboot_infos(u32 info_addr, u8 tag_type)
+static void *get_multiboot_infos(u32 info_addr, u8 tag_type)
 {
 	struct multiboot_tag *tag = (struct multiboot_tag *)(info_addr + 8);
 
