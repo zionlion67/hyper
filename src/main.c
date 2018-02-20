@@ -27,7 +27,8 @@ static void *get_multiboot_infos(u32 info_addr, u8 tag_type)
 	while (tag->type != MULTIBOOT_TAG_TYPE_END) {
 		if (tag->type == tag_type)
 			return tag;
-		tag = (void *)((u8 *)tag + __align_n(tag->size , 8));
+		u32 size = __align_n(tag->size, MULTIBOOT_INFO_ALIGN);
+		tag = (void *)((u8 *)tag + size);
 	}
 
 	return NULL;
