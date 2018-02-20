@@ -34,6 +34,29 @@ static void *get_multiboot_infos(u32 info_addr, u8 tag_type)
 	return NULL;
 }
 
+static const char *multiboot_mmap_entry_types[] = {
+	[1] = "AVAILABLE",
+	[2] = "RESERVED",
+	[3] = "ACPI_RECLAIMABLE",
+	[4] = "NVS",
+	[5] = "BADRAM",
+};
+
+static void dump_memory_map(struct multiboot_tag_mmap *mmap)
+{
+	multiboot_memory_map_t *m = mmap->entries;
+	while ((u8 *)m < (u8 *)mmap + mmap->size) {
+		printf("base_addr=0x%x%x, length=0x%x%x, type=%s\n",
+				m->addr >> 32,
+				m->addr & 0xffffffff,
+				m->len >> 32,
+				m->len & 0xffffffff,
+				multiboot_mmap_entry_types[m->type]);
+
+		m = (multiboot_memory_map_t *)((u8 *)m + mmap->entry_size);
+	}
+}
+
 void hyper_main(u32 magic, u32 info_addr)
 {
 	if (!multiboot2_valid(magic, info_addr))
@@ -43,6 +66,11 @@ void hyper_main(u32 magic, u32 info_addr)
 				  MULTIBOOT_TAG_TYPE_CMDLINE);
 	if (c)
 		printf("Commandline: %s\n", c->string);
+
+	struct multiboot_tag_mmap *mmap = get_multiboot_infos(info_addr,
+				MULTIBOOT_TAG_TYPE_MMAP);
+	if (mmap)
+		dump_memory_map(mmap);
 
 	init_idt();
 	asm volatile ("int $0");
