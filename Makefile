@@ -9,6 +9,7 @@ OBJS = src/boot.o 	\
        src/write.o	\
        src/isr.o	\
        src/interrupts.o \
+       src/memory.o
 
 LIBC_DIR=src/libc
 LIBC_OBJS=$(LIBC_DIR)/printf.o \
@@ -20,7 +21,7 @@ CC=gcc
 CPPFLAGS += -I$(INCLUDE_DIR) -I$(LIBC_DIR)/include
 CFLAGS = -Wall -Wextra -Werror -std=gnu99 -g3 -fno-stack-protector \
 	 -fno-builtin -ffreestanding -Wno-pointer-to-int-cast      \
-	 -Wno-int-to-pointer-cast
+	 -Wno-int-to-pointer-cast -Wno-incompatible-pointer-types
 
 ASFLAGS += -g3
 LDFLAGS = -n -T $(LDSCRIPT) -nostdlib

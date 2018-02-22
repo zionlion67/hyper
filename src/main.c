@@ -4,6 +4,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <multiboot2.h>
+#include <page.h>
 
 static int multiboot2_valid(u32 magic, u32 info_addr)
 {
@@ -72,13 +73,9 @@ void hyper_main(u32 magic, u32 info_addr)
 	if (mmap)
 		dump_memory_map(mmap);
 
+	memory_init(mmap);
 	init_idt();
 	asm volatile ("int $0");
-
-	char *buf = (void *)0xb8000;
-	char *star = "|/-\\";
-	for (u32 i = 0; ; i++)
-		*buf = star[i++ % 4];
 
 	for (;;)
 		asm volatile ("hlt");
