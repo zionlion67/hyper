@@ -8,4 +8,13 @@
 
 #define NULL ((void *)0)
 
+#define offsetof(type, field) \
+	((unsigned long)(&((type *)0)->field))
+
+#define container_of(addr, type, field) \
+	((type *)((char *)addr - offsetof(type, field)))
+
+#define ERR_PTR(x) ((void *)x)
+	
+
 #endif
