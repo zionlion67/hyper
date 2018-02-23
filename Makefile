@@ -15,13 +15,15 @@ LIBC_DIR=src/libc
 LIBC_OBJS=$(LIBC_DIR)/printf.o \
 	  $(LIBC_DIR)/strlen.o \
 	  $(LIBC_DIR)/strnlen.o \
-	  $(LIBC_DIR)/puts.o
+	  $(LIBC_DIR)/puts.o	\
+	  $(LIBC_DIR)/memset.o
 
 CC=gcc
 CPPFLAGS += -I$(INCLUDE_DIR) -I$(LIBC_DIR)/include
 CFLAGS = -Wall -Wextra -Werror -std=gnu99 -g3 -fno-stack-protector \
 	 -fno-builtin -ffreestanding -Wno-pointer-to-int-cast      \
-	 -Wno-int-to-pointer-cast -Wno-incompatible-pointer-types
+	 -Wno-int-to-pointer-cast -Wno-incompatible-pointer-types  \
+	 -Wno-int-conversion
 
 ASFLAGS += -g3
 LDFLAGS = -n -T $(LDSCRIPT) -nostdlib
