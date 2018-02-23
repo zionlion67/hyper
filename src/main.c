@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <multiboot2.h>
 #include <page.h>
+#include <paging.h>
 
 static int multiboot2_valid(u32 magic, u32 info_addr)
 {
@@ -75,6 +76,7 @@ void hyper_main(u32 magic, u32 info_addr)
 
 	memory_init(mmap);
 	init_idt();
+	init_paging();
 	asm volatile ("int $0");
 
 	for (;;)

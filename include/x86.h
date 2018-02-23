@@ -14,4 +14,30 @@
 #define MSR_EFER_LME_BIT	8
 #define MSR_EFER_LME		(1 << MSR_EFER_LME_BIT)
 
-#endif
+
+#define __readq(reg)				\
+({						\
+ 	u64 __ret;				\
+	asm volatile ("movq %%" #reg ", %0"	\
+		      : "=g"(__ret) ::); 	\
+	__ret;					\
+})
+
+#define __writeq(reg, val)			\
+({						\
+	asm volatile ("movq %0, %%" #reg	\
+		      : /* No output */		\
+		      : "g"(val)		\
+		      : "memory");		\
+})
+
+#define read_cr0() __readq(cr0)
+#define read_cr2() __readq(cr2)
+#define read_cr3() __readq(cr3)
+#define read_cr4() __readq(cr4)
+
+#define write_cr0(x) __writeq(cr0, (x))
+#define write_cr3(x) __writeq(cr3, (x))
+#define write_cr4(x) __writeq(cr4, (x))
+
+#endif /* !_X86_H_ */

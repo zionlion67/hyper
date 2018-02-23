@@ -20,6 +20,9 @@ struct page_frame {
 	struct list free_list;
 };
 
+paddr_t page_to_phys(struct page_frame *frame);
+struct page_frame *phys_to_page(paddr_t addr);
+struct page_frame *pfn_to_page(u64 pfn);
 int memory_init(struct multiboot_tag_mmap *mmap);
 
 #endif /* !_PAGE_H_ */

@@ -23,27 +23,32 @@ typedef u64 pte_t;
 #define PG_NO_EXECUTE		(1 << 63)
 
 #define PAGE_SHIFT	12
-#define PAGE_SIZE	(1UL << PAGE_SHIFT) 
+#define PAGE_SIZE	(1UL << PAGE_SHIFT)
 #define PAGE_MASK	(~(PAGE_SIZE - 1))
 
 #define BIG_PAGE_SHIFT	20
 #define BIG_PAGE_SIZE	(1UL << BIG_PAGE_SHIFT)
 #define BIG_PAGE_MASK	(~(BIG_PAGE_SIZE - 1))
 
-#define PGDIR_SHIFT	39
-#define PGDIR_SIZE	(1UL << PGDIR_SHIFT)
-#define PGDIR_MASK	(~(PGDIR_SIZE - 1))
+#define PGD_SHIFT	39
+#define PGD_SIZE	(1UL << PGD_SHIFT)
+#define PGD_MASK	(~(PGD_SIZE - 1))
+#define pgd_offset(x)	((((x) & PGD_MASK) >> PGD_SHIFT) & 0x1ff)
 
 #define PUD_SHIFT	20
 #define PUD_SIZE	(1UL << PUD_SHIFT)
 #define PUD_MASK	(~(PUD_SIZE - 1))
+#define pud_offset(x)	((((x) & PUD_MASK) >> PUD_SHIFT) & 0x1ff)
 
 #define PMD_SHIFT	21
 #define PMD_SIZE	(1UL << PMD_SHIFT)
 #define PMD_MASK	(~(PMD_SIZE - 1))
+#define pmd_offset(x)	((((x) & PMD_MASK) >> PMD_SHIFT) & 0x1ff)
 
 #define PTRS_PER_TABLE	512
 
 #define MAX_PHYS_ADDR	(0xffffffffffffffffUL)
+
+#define PAGE_OFFSET 	0xffffffff80000000UL
 
 #endif /* !_PAGE_TYPES_H */
