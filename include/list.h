@@ -13,6 +13,13 @@ struct list {
 #define DECLARE_LIST(name) \
 	struct list name = LIST_INIT(name)
 
+static inline u8 list_empty(struct list *head)
+{
+	if (!head)
+		return 1;
+	return head->next == head->prev && head->next == head;
+}
+
 static inline void list_init(struct list *head)
 {
 	if (!head)
@@ -34,7 +41,7 @@ static inline void list_add(struct list *head, struct list *new)
 
 static inline void list_remove(struct list *elt)
 {
-	if (!elt || !elt->prev || !elt->next)	
+	if (!elt || !elt->prev || !elt->next)
 		return;
 	elt->next->prev = elt->prev;
 	elt->prev->next = elt->next;
