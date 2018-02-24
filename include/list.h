@@ -45,8 +45,8 @@ static inline void list_remove(struct list *elt)
 		return;
 	elt->next->prev = elt->prev;
 	elt->prev->next = elt->next;
-	elt->next = NULL;
-	elt->prev = NULL;
+	elt->next = elt;
+	elt->prev = elt;
 }
 
 #define list_entry(elt, type, field)	container_of(elt, type, field)

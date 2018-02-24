@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <string.h>
 #include <page.h>
 #include <paging.h>
@@ -27,32 +28,43 @@ int init_paging(void)
 	pgd_t *new_pgd = (pgd_t *)__align_n(addr, PAGE_SIZE);
 	pgd_t *boot_pgd = (pgd_t *)(read_cr3() & PAGE_MASK);
 
-	//TODO page frames corresponding to kernel are still
-	//     considered available by the frame allocator ...
-	//     Either map them here directly or handle this in the frame
-	//     allocator initialization ...
-
 	memset(new_pgd, 0, PTRS_PER_TABLE * sizeof(pgd_t));
 
 	/* Our new pgd still maps the first 4G in flat */
 	new_pgd[0] = boot_pgd[0];
 
+	int pg_common_flags = PG_PRESENT|PG_WRITABLE|PG_GLOBAL;
+
 	u64 off = pgd_offset(PAGE_OFFSET);
 	new_pgd[off] = (pgd_t)new_pgd + PAGE_SIZE;
-	new_pgd[off] |= PG_PRESENT|PG_WRITABLE|PG_GLOBAL;
+	new_pgd[off] |= pg_common_flags;
 
 	pud_t *pud = new_pgd[off] & PAGE_MASK;
 	off = pud_offset(PAGE_OFFSET);
 	pud[off] = (pud_t)pud + PAGE_SIZE;
-	pud[off] |= PG_PRESENT|PG_WRITABLE|PG_GLOBAL;
+	pud[off] |= pg_common_flags;
 
 	/* Each entry maps a 2MB page */
 	pmd_t *pmd = pud[off] & PAGE_MASK;
-	addr = KERNEL_START_PADDR;
-	for (u64 i = 0, off = pmd_offset(PAGE_OFFSET); i < PTRS_PER_TABLE; ++i, ++off) {
+	addr = 0;
+
+	/*
+	 * PAGE_OFFSET vaddr maps paddr 0. Here, we only map the physical
+	 * frames used by the kernel.
+	 */
+	for (off = pmd_offset(PAGE_OFFSET); off < PTRS_PER_TABLE; ++off) {
 		pmd[off] = addr;
-		pmd[off] |= PG_PRESENT|PG_WRITABLE|PG_GLOBAL|PG_HUGE_PAGE;
-		addr += 2 * BIG_PAGE_SIZE;
+		if (addr >= KERNEL_START_PADDR && addr < (u64)_end)
+			pmd[off] |= pg_common_flags|PG_HUGE_PAGE;
+
+		for (u64 i = 0; i < (2 * BIG_PAGE_SIZE) / PAGE_SIZE; ++i) {
+			struct page_frame *f = phys_to_page(addr);
+			f->vaddr = phys_to_virt(addr);
+			if (!list_empty(&f->free_list))
+				list_remove(&f->free_list);
+			addr += PAGE_SIZE;
+		}
+
 		if (addr > (u64)_end)
 			break;
 	}

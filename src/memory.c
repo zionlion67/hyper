@@ -122,10 +122,11 @@ int memory_init(struct multiboot_tag_mmap *mmap)
 	u64 cnt = 0;
 	for (struct page_frame *f = first_frame; f < last_frame; ++f) {
 		const paddr_t paddr = page_to_phys(f);
+		list_init(&f->free_list);
 		if (!(paddr_mem_flags(paddr) & MEM_RAM_USABLE))
 			continue;
+
 		f->vaddr = (vaddr_t)NULL;
-		list_init(&f->free_list);
 		list_add(&frame_free_list, &f->free_list);
 		cnt++;
 	}

@@ -30,4 +30,9 @@ static inline paddr_t virt_to_phys(vaddr_t vaddr)
 	return vaddr - PAGE_OFFSET;
 }
 
+static inline vaddr_t phys_to_virt(paddr_t paddr)
+{
+	return paddr + PAGE_OFFSET;
+}
+
 #endif /* !_PAGE_H_ */
