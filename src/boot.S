@@ -138,6 +138,11 @@ PROC_ENTRY(startup_64)
 PROC_END(startup_64)
 
 PROC_ENTRY(startup_64_high)
+	// Reload GDTR with GDT virtual address
+	leaq	gdtr(%rip), %rax
+	addq	$KERNEL_VMA, 2(%rax)
+	lgdt	gdtr
+
 	movl	$__KERNEL_DS, %eax
 	movl	%eax, %ds
 	movl	%eax, %es
