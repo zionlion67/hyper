@@ -9,6 +9,12 @@
 extern char _end[];
 extern u64 last_pfn;
 
+static inline void page_frame_used(struct page_frame *f)
+{
+	f->vaddr = phys_to_virt(page_to_phys(f));
+	list_remove(&f->free_list);
+}
+
 /*
  * Setup kernel page tables, we're still on boot page tables.
  * The kernel will be located almost at the top of the virtual
@@ -17,21 +23,8 @@ extern u64 last_pfn;
  */
 int init_paging(void)
 {
-	/*
-	 * 1MB has been kept unallocated at the top of valid physical
-	 * located after the page_frame array.
-	 * XXX: reuse boot_pgtable ? there is sufficent space.
-	 */
-	struct page_frame *last_frame = pfn_to_page(last_pfn);
-	u64 addr = (u64)(last_frame + 1);
-
-	pgd_t *new_pgd = (pgd_t *)__align_n(addr, PAGE_SIZE);
 	pgd_t *boot_pgd = (pgd_t *)(read_cr3() & PAGE_MASK);
-
-	memset(new_pgd, 0, PTRS_PER_TABLE * sizeof(pgd_t));
-
-	/* Our new pgd still maps the first 4G in flat */
-	new_pgd[0] = boot_pgd[0];
+	pgd_t *new_pgd = boot_pgd;
 
 	int pg_common_flags = PG_PRESENT|PG_WRITABLE|PG_GLOBAL;
 
@@ -46,34 +39,27 @@ int init_paging(void)
 
 	/* Each entry maps a 2MB page */
 	pmd_t *pmd = pud[off] & PAGE_MASK;
-	addr = 0;
+	paddr_t addr = 0;
 
 	/*
-	 * PAGE_OFFSET vaddr maps paddr 0. Here, we only map the physical
-	 * frames used by the kernel.
+	 * PAGE_OFFSET vaddr maps paddr 0. Here, we map all the physical
+	 * memory below _end. ATM, this is only one 2MB page.
 	 */
 	for (off = pmd_offset(PAGE_OFFSET); off < PTRS_PER_TABLE; ++off) {
 		pmd[off] = addr;
-		if (addr >= KERNEL_START_PADDR && addr < (u64)_end)
-			pmd[off] |= pg_common_flags|PG_HUGE_PAGE;
+		//TODO map kernel code as read only ...
+		pmd[off] |= pg_common_flags|PG_HUGE_PAGE;
 
-		for (u64 i = 0; i < (2 * BIG_PAGE_SIZE) / PAGE_SIZE; ++i) {
-			struct page_frame *f = phys_to_page(addr);
-			f->vaddr = phys_to_virt(addr);
-			if (!list_empty(&f->free_list))
-				list_remove(&f->free_list);
-			addr += PAGE_SIZE;
-		}
-
-		if (addr > (u64)_end)
+		addr += 2 * BIG_PAGE_SIZE;
+		if (addr > (paddr_t)_end)
 			break;
 	}
 
-	/*
-	 * TODO we're still on the flat mapping, even after writing to cr3.
-	 *      Before executing using the new mapping, DO NOT FORGET to map
-	 *      the paging structure into the new kernel virtual addr space.
-	 */
+	/* Removes kernel page frames from allocator pool */
+	for (addr = KERNEL_START_PADDR; addr < (paddr_t)_end; addr += PAGE_SIZE)
+		page_frame_used(phys_to_page(addr));
+
+	//TODO (re)load IDTR with IDT virtual address
 
 	write_cr3((paddr_t)new_pgd);
 

@@ -35,7 +35,7 @@ typedef u64 pte_t;
 #define PGD_MASK	(~(PGD_SIZE - 1))
 #define pgd_offset(x)	((((x) & PGD_MASK) >> PGD_SHIFT) & 0x1ff)
 
-#define PUD_SHIFT	20
+#define PUD_SHIFT	30
 #define PUD_SIZE	(1UL << PUD_SHIFT)
 #define PUD_MASK	(~(PUD_SIZE - 1))
 #define pud_offset(x)	((((x) & PUD_MASK) >> PUD_SHIFT) & 0x1ff)
