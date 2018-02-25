@@ -2,36 +2,53 @@
 #include <gdt.h>
 #include <x86.h>
 
-#define MULTIBOOT2_MAGIC 	0xe85250d6
-#define MULTIBOOT2_ARCH_I386 	0x0
+#define ASM_FILE
+#include <multiboot2.h>
+
 #define MULTIBOOT2_HDR_SZ 	(multiboot_header_end - multiboot_header)
 
 #define BOOT_STACK_SZ (4 * 4096)
-#define BOOT_PGTABLE_SZ (17 * 4096)
+#define BOOT_PGTABLE_SZ (5 * 4096)
+
+#define KERNEL_LMA 0x200000
+#define KERNEL_VMA (0xffffffff80000000)
 
 	.section .multiboot
 	.type multiboot_header, @object
 multiboot_header:
 	.balign 8
-	.long MULTIBOOT2_MAGIC
-	.long MULTIBOOT2_ARCH_I386
+	.long MULTIBOOT2_HEADER_MAGIC
+	.long MULTIBOOT_ARCHITECTURE_I386
 	.long MULTIBOOT2_HDR_SZ
-	.long -(MULTIBOOT2_MAGIC + MULTIBOOT2_HDR_SZ) // checksum
-	
+	.long -(MULTIBOOT2_HEADER_MAGIC + MULTIBOOT2_HDR_SZ) // checksum
+
+	.balign 8
+	.short MULTIBOOT_HEADER_TAG_ADDRESS
+	.short 0
+	.long 24
+	.long KERNEL_LMA // hdr physical addr
+	.long KERNEL_LMA // load_addr
+	.long (_edata - KERNEL_VMA) // load_end
+	.long (_end - KERNEL_VMA)   // bss_end
+
+	.balign 8
+	.word MULTIBOOT_HEADER_TAG_ENTRY_ADDRESS
+	.word 0
+	.long 12
+	.long (startup_32 - KERNEL_VMA)
+
+	.balign 8
 	// final tag
-	.word 0 // type
+	.word MULTIBOOT_HEADER_TAG_END // type
 	.word 0 // flags
 	.long 8 // size
 	ASM_SYM_SIZE(multiboot_header)
 multiboot_header_end:
 
-// As you might notice, the following code is basically a simplified
-// linux/arch/x86/boot/compressed/head_64.S
-
 	.section .text
 PROC_ENTRY(startup_32)
 	.code32
-	movl	$end_stack, %esp
+	movl	$(end_stack - KERNEL_VMA), %esp
 	pushl	$0
 	popfl
 	pushl	%ebx // save multiboot info addr
@@ -45,39 +62,7 @@ PROC_ENTRY(startup_32)
 	orl 	$CR4_PAE, %eax
 	movl	%eax, %cr4
 
-	movl	$boot_pgtable, %edi
-	xorl	%eax, %eax
-	movl	$(BOOT_PGTABLE_SZ/4), %ecx
-	cld
-	rep	stosl	// initialize all to zero
-
-	// Level 4
-	movl	$boot_pgtable, %edi
-	leal	0x1007(%edi), %eax
-	movl	%eax, (%edi)
-
-	// Level 3
-	movl	$boot_pgtable + 0x1000, %edi
-	leal	0x1007(%edi), %eax
-	movl	$4, %ecx
-1:	movl	%eax, (%edi)
-	addl	$0x1000, %eax
-	addl	$8, %edi
-	decl	%ecx
-	jnz	1b
-
-	// Level 2
-	movl	$boot_pgtable + 0x2000, %edi
-	movl	$0x83, %eax // P=1 U/S=1 PS=1 G=1
-	movl	$2048, %ecx
-1:	movl	%eax, (%edi)
-	addl	$0x200000, %eax
-	addl	$8, %edi
-	decl	%ecx
-	jnz	1b
-
-	// We are identity mapped for the first 4GB of RAM
-	movl	$boot_pgtable, %eax
+	movl	$(boot_pgd - KERNEL_VMA), %eax
 	movl	%eax, %cr3
 
 	// Enable Long Mode in EFER
@@ -87,14 +72,14 @@ PROC_ENTRY(startup_32)
 	wrmsr
 
 	// Load new GDT
-	lgdt	gdtr
+	lgdt	(gdtr - KERNEL_VMA)
 
 	// Load TSS
 	movl	$__TSS_ENTRY, %eax
 	ltr	%ax
 
 	pushl	$__KERNEL_CS
-	pushl	$startup_64
+	pushl	$(startup_64 - KERNEL_VMA)
 
 	// Enable Paging
 	movl	$(CR0_PG | CR0_PE), %eax
@@ -109,26 +94,6 @@ PROC_ENTRY(startup_32)
 	movl 	$0x2f4f2f4b, (%esi)
 	hlt
 PROC_END(startup_32)
-
-	.code64
-PROC_ENTRY(startup_64)
-	movl	$__KERNEL_DS, %eax
-	movl	%eax, %ds
-	movl	%eax, %es
-	movl	%eax, %ss
-	movl	%eax, %fs
-	movl	%eax, %gs
-	
-	movl	(%esp), %edi	// multiboot2 magic
-	movl	4(%esp), %esi	// multiboot2 infos addr
-
-	//setup new stack
-	movq	$end_stack, %rsp
-
-	callq	hyper_main
-
-	hlt
-PROC_END(startup_64)
 
 	.code32
 #define CPUID_LM_BIT (1 << 29)
@@ -165,6 +130,36 @@ PROC_ENTRY(check_longmode)
 	ret
 PROC_END(check_longmode)
 
+	.section .text
+	.code64
+PROC_ENTRY(startup_64)
+	movabsq	$startup_64_high, %rax
+	jmpq *%rax
+PROC_END(startup_64)
+
+PROC_ENTRY(startup_64_high)
+	movl	$__KERNEL_DS, %eax
+	movl	%eax, %ds
+	movl	%eax, %es
+	movl	%eax, %ss
+	movl	%eax, %fs
+	movl	%eax, %gs
+
+	movl	(%esp), %edi	// multiboot2 magic
+	movl	4(%esp), %esi	// multiboot2 infos addr
+
+	//setup new stack
+	movq	$end_stack, %rsp
+
+	movq	$0x0, boot_pgd
+	invlpg  0
+
+	callq	hyper_main
+
+	hlt
+PROC_END(startup_64)
+
+
 
 	.section .data
 gdt:
@@ -176,18 +171,28 @@ gdt:
 gdt_end:
 
 gdtr:
-	.word	gdt_end - gdt
-	.long	gdt
+	.word	gdt_end - gdt - 1
+	.long	gdt - KERNEL_VMA
+
+.balign	4096
+boot_pgd:
+	.quad	boot_pud - KERNEL_VMA + 3 /* [ 0x00000000 - 0x7ffffffff ] */
+	.fill	510, 8, 0
+	.quad	boot_pud - KERNEL_VMA + 3 /* [ 0xfffffff800000000 - 0xffffffffffffffff ] */
+
+boot_pud:
+	.quad	boot_pmd - KERNEL_VMA + 3
+	.fill	509, 8, 0
+	.quad	boot_pmd - KERNEL_VMA + 3
+	.fill	1, 8, 0
+
+boot_pmd:
+	.quad	0x0000000000000083	/* 0MB - 2MB */
+	.quad	0x0000000000200083	/* 2MB - 4MB */
 
 	.section .bss
 stack:
 	.fill BOOT_STACK_SZ, 1, 0
 	.balign 16
 
-.global end_stack
 end_stack:
-
-.global boot_pgtable
-boot_pgtable:
-	.balign 0x1000
-	.fill BOOT_PGTABLE_SZ, 1, 0

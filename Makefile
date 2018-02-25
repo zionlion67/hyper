@@ -24,16 +24,16 @@ CPPFLAGS += -I$(INCLUDE_DIR) -I$(LIBC_DIR)/include
 CFLAGS = -Wall -Wextra -Werror -std=gnu99 -g3 -fno-stack-protector \
 	 -fno-builtin -ffreestanding -Wno-pointer-to-int-cast      \
 	 -Wno-int-to-pointer-cast -Wno-incompatible-pointer-types  \
-	 -Wno-int-conversion
+	 -Wno-int-conversion -fno-plt
 
 ASFLAGS += -g3
-LDFLAGS = -n -T $(LDSCRIPT) -nostdlib
+LDFLAGS = -n -T $(LDSCRIPT) -nostdlib -static
 LDSCRIPT = src/hyper.lds
 
 .PHONY: all clean run iso
 
 all: $(ISO)
-	
+
 iso: $(ISO)
 
 run: $(ISO)
@@ -42,7 +42,7 @@ run: $(ISO)
 debug: $(ISO)
 	qemu-system-x86_64 -cdrom $(ISO) -serial stdio -s -S
 
-$(ISO): $(OUT_DIR) $(KERNEL) 
+$(ISO): $(OUT_DIR) $(KERNEL)
 	mkdir -p $(OUT_DIR)/iso/boot/grub
 	cp $(KERNEL) $(OUT_DIR)/iso/boot/kernel
 	cp $(GRUB_CFG) $(OUT_DIR)/iso/boot/grub/grub.cfg

@@ -22,7 +22,7 @@ static int multiboot2_valid(u32 magic, u32 info_addr)
 	return 1;
 }
 
-static void *get_multiboot_infos(u32 info_addr, u8 tag_type)
+static void *get_multiboot_infos(vaddr_t info_addr, u8 tag_type)
 {
 	struct multiboot_tag *tag = (struct multiboot_tag *)(info_addr + 8);
 
@@ -48,7 +48,7 @@ static void dump_memory_map(struct multiboot_tag_mmap *mmap)
 {
 	multiboot_memory_map_t *m = mmap->entries;
 	while ((u8 *)m < (u8 *)mmap + mmap->size) {
-		printf("base_addr=0x%x%x, length=0x%x%x, type=%s\n",
+		printf("base_addr=0x%x%x, length=0x%x%x type=%s\n",
 				m->addr >> 32,
 				m->addr & 0xffffffff,
 				m->len >> 32,
@@ -64,18 +64,22 @@ void hyper_main(u32 magic, u32 info_addr)
 	if (!multiboot2_valid(magic, info_addr))
 		return;
 
-	struct multiboot_tag_string *c = get_multiboot_infos(info_addr,
+	vaddr_t mbi_addr = phys_to_virt(info_addr);
+	struct multiboot_tag_string *c = get_multiboot_infos(mbi_addr,
 				  MULTIBOOT_TAG_TYPE_CMDLINE);
 	if (c)
 		printf("Commandline: %s\n", c->string);
 
-	struct multiboot_tag_mmap *mmap = get_multiboot_infos(info_addr,
+	struct multiboot_tag_mmap *mmap = get_multiboot_infos(mbi_addr,
 				MULTIBOOT_TAG_TYPE_MMAP);
 	if (mmap)
 		dump_memory_map(mmap);
 
-	memory_init(mmap);
+	for (;;)
+		asm volatile ("hlt");
+
 	init_idt();
+	memory_init(mmap);
 	init_paging();
 	asm volatile ("int $0");
 

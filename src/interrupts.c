@@ -48,7 +48,7 @@ static int add_gate(const u16 irq, u64 handler, u8 ist, u8 flags)
 		return -1;
 
 	struct idt_gate *gate = &idt[irq];
-	
+
 	gate->offset_lo = handler & 0xffff;
 	gate->offset_mi = (handler & 0xffff0000) >> 16;
 	gate->offset_hi = handler >> 32;
@@ -59,7 +59,7 @@ static int add_gate(const u16 irq, u64 handler, u8 ist, u8 flags)
 	}
 
 	gate->ist = ist;
-	
+
 	if (flags & IDT_TRAP_GATE)
 		gate->type = IDT_TRAP_GATE_TYPE;
 	else if (flags & IDT_INTR_GATE)
