@@ -162,7 +162,7 @@ PROC_ENTRY(startup_64_high)
 	callq	hyper_main
 
 	hlt
-PROC_END(startup_64)
+PROC_END(startup_64_high)
 
 
 
