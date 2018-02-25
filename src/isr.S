@@ -9,11 +9,9 @@ isr_stub_\nb:
 	.endif
 	pushq	%rax
 	pushq	$\nb
-	jmpq	*isr_indirection
+	leaq	isr_stub_common(%rip), %rax
+	jmpq	*%rax
 .endm
-
-isr_indirection:
-	.quad	isr_stub_common
 
 isr_stub_common:
 	popq	%rax

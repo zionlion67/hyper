@@ -84,8 +84,7 @@ static void default_irq_handler(struct irq_frame *frame)
 extern void isr_stub_0(void);
 int init_idt(void)
 {
-	u32 start = (u32)isr_stub_0 & 0xffffffff;
-
+	u64 start = (u64)isr_stub_0;
 	for (u16 i = 0; i < NR_INTERRUPTS; ++i) {
 		interrupt_handlers[i] = default_irq_handler;
 		add_gate(i, start + i * 16, 0, IDT_KERNEL_GATE|IDT_INTR_GATE);
@@ -95,6 +94,7 @@ int init_idt(void)
 		.limit = sizeof(idt) - 1,
 		.base = (u64)idt,
 	};
+
 
 	asm volatile ("lidt %0" : /* No outputs */ : "m"(idtr) : "memory");
 	asm volatile ("sti");
