@@ -117,6 +117,7 @@ int memory_init(struct multiboot_tag_mmap *mmap)
 	 */
 	first_frame = (void *)(__align(last_paddr, PAGE_SIZE)
 			       - page_count * PAGE_SIZE - BIG_PAGE_SIZE);
+	first_frame = (void *)phys_to_virt((paddr_t)first_frame);
 	last_frame = first_frame + frame_count;
 
 	u64 cnt = 0;

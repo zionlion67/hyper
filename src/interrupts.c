@@ -1,6 +1,7 @@
 #include <interrupts.h>
 #include <gdt.h>
 #include <stdio.h>
+#include <x86.h>
 
 irqhandler_t interrupt_handlers[NR_INTERRUPTS];
 
@@ -72,10 +73,29 @@ static int add_gate(const u16 irq, u64 handler, u8 ist, u8 flags)
 
 }
 
+static void dump_context(const struct irq_frame *f)
+{
+#define X(reg) \
+	printf(#reg": 0x%x%x\n", f->reg >> 32, f->reg & 0xffffffff);
+	X(rax);
+	X(rbx);
+	X(rcx);
+	X(rdx);
+	X(rsi);
+	X(rdi);
+	X(rsp);
+	X(rip);
+#undef X
+	printf("CR2: ");
+	print64(read_cr2());
+	printf("\n");
+}
+
 static void default_irq_handler(struct irq_frame *frame)
 {
 	if (frame->irq < 20)
 		printf("Interrupt: %s Exception\n", exceptions_str[frame->irq]);
+	dump_context(frame);
 	printf("Halting ...\n");
 	for (;;)
 		asm volatile ("hlt");

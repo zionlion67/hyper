@@ -76,10 +76,10 @@ void hyper_main(u32 magic, u32 info_addr)
 		dump_memory_map(mmap);
 
 	init_idt();
+	memory_init(mmap);
 	asm volatile ("int $0");
 
 #if 0
-	memory_init(mmap);
 	init_paging();
 
 	for (;;)
