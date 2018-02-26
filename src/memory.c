@@ -21,6 +21,10 @@ static paddr_t first_frame_paddr;
 /* Last valid page frame number */
 u64 last_pfn;
 
+/* Kernel start/end vaddr */
+extern char _start[];
+extern char _end[];
+
 /* ATM only get available regions */
 static void init_memory_map(struct multiboot_tag_mmap *mmap)
 {
@@ -107,17 +111,8 @@ int memory_init(struct multiboot_tag_mmap *mmap)
 	/* number of 4K frames */
 	u64 frame_count = (last_paddr - first_paddr) / PAGE_SIZE;
 
-	/* number pages needed to hold frame array */
-	u64 page_count = __align_n(frame_count * sizeof(struct page_frame),
-				   PAGE_SIZE) / PAGE_SIZE;
-
-	/*
-	 * The frame array is located at the top of physical address space.
-	 * 1MB page is left unallocated at the top for kernel paging structures.
-	 */
-	first_frame = (void *)(__align(last_paddr, PAGE_SIZE)
-			       - page_count * PAGE_SIZE - BIG_PAGE_SIZE);
-	first_frame = (void *)phys_to_virt((paddr_t)first_frame);
+	/* the frame array is located just after the kernel */
+	first_frame = (void *)_end;
 	last_frame = first_frame + frame_count;
 
 	u64 cnt = 0;
@@ -128,7 +123,8 @@ int memory_init(struct multiboot_tag_mmap *mmap)
 			continue;
 
 		f->vaddr = (vaddr_t)NULL;
-		list_add(&frame_free_list, &f->free_list);
+		if (paddr < virt_to_phys(_start) || paddr >= virt_to_phys(last_frame))
+			list_add(&frame_free_list, &f->free_list);
 		cnt++;
 	}
 	last_pfn = cnt - 1;

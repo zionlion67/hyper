@@ -51,4 +51,6 @@ typedef u64 pte_t;
 
 #define PAGE_OFFSET 	0xffffffff80000000UL
 
+#define pte_present(p)	(p & PG_PRESENT)
+
 #endif /* !_PAGE_TYPES_H */
