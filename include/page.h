@@ -25,6 +25,9 @@ struct page_frame *phys_to_page(paddr_t addr);
 struct page_frame *pfn_to_page(u64 pfn);
 int memory_init(struct multiboot_tag_mmap *mmap);
 
+struct page_frame *alloc_page_frames(vaddr_t vaddr, u64 n);
+struct page_frame *alloc_page_frame(vaddr_t vaddr);
+
 static inline paddr_t virt_to_phys(vaddr_t vaddr)
 {
 	return vaddr - PAGE_OFFSET;

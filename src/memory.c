@@ -96,6 +96,42 @@ struct page_frame *pfn_to_page(u64 pfn)
 	return first_frame + pfn;
 }
 
+#define PAGE_FRAME_ENTRY(l)	list_entry((l), struct page_frame, free_list)
+
+/* Very dummy allocator */
+/* Allocates n contiguous page frames */
+struct page_frame *alloc_page_frames(vaddr_t vaddr, u64 n)
+{
+	struct list *l;
+	list_for_each_reverse(&frame_free_list, l) {
+		struct page_frame *start = PAGE_FRAME_ENTRY(l);
+		struct page_frame *end;
+		for (end = start; end < last_frame && n > 0; ++end, --n) {
+			/* frame isn't free */
+			if (list_empty(&end->free_list))
+				break;
+		}
+
+		if (n > 0)
+			continue;
+
+		/* we found contigous frames */
+		for (struct page_frame *tmp = start; tmp < end; ++tmp) {
+			tmp->vaddr = vaddr;
+			list_remove(&tmp->free_list);
+			vaddr += 0x1000;
+		}
+
+		return start;
+	}
+	return NULL;
+}
+
+struct page_frame *alloc_page_frame(vaddr_t vaddr)
+{
+	return alloc_page_frames(vaddr, 1);
+}
+
 /*
  * Build frame array. For now, kernel mappings are not taken
  * into account.
