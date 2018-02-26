@@ -3,7 +3,6 @@
 
 /*
  * Simple page frame allocator.
- * The model is totally taken from the STOS project, adapted for x86_64.
  */
 
 static DECLARE_LIST(frame_free_list);
@@ -119,7 +118,7 @@ struct page_frame *alloc_page_frames(vaddr_t vaddr, u64 n)
 		for (struct page_frame *tmp = start; tmp < end; ++tmp) {
 			tmp->vaddr = vaddr;
 			list_remove(&tmp->free_list);
-			vaddr += 0x1000;
+			vaddr += PAGE_SIZE;
 		}
 
 		return start;
@@ -132,10 +131,7 @@ struct page_frame *alloc_page_frame(vaddr_t vaddr)
 	return alloc_page_frames(vaddr, 1);
 }
 
-/*
- * Build frame array. For now, kernel mappings are not taken
- * into account.
- */
+/* Build page frame array and init free frames list */
 int memory_init(struct multiboot_tag_mmap *mmap)
 {
 	init_memory_map(mmap);
