@@ -9,7 +9,7 @@ OBJS = src/boot.o 	\
        src/write.o	\
        src/isr.o	\
        src/interrupts.o \
-       src/memory.o	\
+       src/page_alloc.o
 
 LIBC_DIR=src/libc
 LIBC_OBJS=$(LIBC_DIR)/printf.o \

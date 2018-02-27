@@ -131,6 +131,19 @@ struct page_frame *alloc_page_frame(vaddr_t vaddr)
 	return alloc_page_frames(vaddr, 1);
 }
 
+void release_page_frames(struct page_frame *f, u64 n)
+{
+	for (u64 i = 0; i < n; ++i) {
+		f[i].vaddr = (vaddr_t)NULL;
+		list_add(&frame_free_list, &f[i].free_list);
+	}
+}
+
+void release_page_frame(struct page_frame *f)
+{
+	release_page_frames(f, 1);
+}
+
 /* Build page frame array and init free frames list */
 int memory_init(struct multiboot_tag_mmap *mmap)
 {
