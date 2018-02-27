@@ -22,8 +22,7 @@ static pmd_t *kernel_pmd(void)
 
 static inline void map_frames(pmd_t *pmd, struct page_frame *f, u64 n, u32 flags)
 {
-	u64 frames_per_page = (2 * BIG_PAGE_SIZE) / PAGE_SIZE;
-	for (u64 i = 0; i < n; ++i, f += frames_per_page) {
+	for (u64 i = 0; i < n; ++i, f += FRAMES_PER_2M_PAGE) {
 		pmd[i] = page_to_phys(f);
 		pmd[i] |= flags;
 	}
