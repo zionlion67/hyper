@@ -60,7 +60,16 @@ void *alloc_pages(u64 n)
 			break;
 	}
 
+	/*
+	 * For the moment, only allow allocations within the kernel 1G mapping.
+	 * This means we have 1G - 4MB of free memory. ATM, 4MB are sufficient
+	 * to hold the whole kernel and the page frame array.
+	 */
+	if (off > PTRS_PER_TABLE - n)
+		return NULL;
+
 	struct page_frame *f = alloc_page_frames(pmd + off, n * FRAMES_PER_2M_PAGE);
+	//TODO try to allocate non-contiguous 2MB physical pages
 	if (f == NULL)
 		return NULL;
 
