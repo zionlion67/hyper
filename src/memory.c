@@ -41,10 +41,13 @@ static inline void map_frame(pmd_t *pmd, struct page_frame *f, u32 flags)
  */
 void *alloc_pages(u64 n)
 {
+	if (n == 0)
+		return NULL;
+
 	u64 off;
 	pmd_t *pmd = kernel_pmd();
 
-	for (off = 0; off < PTRS_PER_TABLE; ++off) {
+	for (off = 0; off <= PTRS_PER_TABLE - n; ++off) {
 		if (pg_present(pmd[off]))
 			continue;
 		u64 i;
@@ -56,8 +59,6 @@ void *alloc_pages(u64 n)
 		else
 			break;
 	}
-	if (off >= PTRS_PER_TABLE - n)
-		return NULL;
 
 	struct page_frame *f = alloc_page_frames(pmd + off, n * FRAMES_PER_2M_PAGE);
 	if (f == NULL)
