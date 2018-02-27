@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <multiboot2.h>
 #include <page.h>
-#include <paging.h>
+#include <memory.h>
 
 static int multiboot2_valid(u32 magic, u32 info_addr)
 {
@@ -77,10 +77,11 @@ void hyper_main(u32 magic, u32 info_addr)
 
 	init_idt();
 	memory_init(mmap);
-	struct page_frame *f = alloc_page_frame(PAGE_OFFSET);
-	struct page_frame *g = alloc_page_frames(PAGE_OFFSET, 4);
-	(void)f;
-	(void)g;
+	char *s = alloc_page();
+	for (int i = 0; i < 26; ++i)
+		s[i] = 'a' + i;
+	printf("%s\n", s);
+	release_page(s);
 	asm volatile ("int $0");
 
 #if 0

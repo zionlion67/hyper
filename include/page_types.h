@@ -11,6 +11,8 @@ typedef u64 pud_t;
 typedef u64 pmd_t;
 typedef u64 pte_t;
 
+typedef unsigned gfp_t;
+
 #define PG_PRESENT		(1 << 0)
 #define PG_WRITABLE		(1 << 1)
 #define PG_USER			(1 << 2)
@@ -45,12 +47,14 @@ typedef u64 pte_t;
 #define PMD_MASK	(~(PMD_SIZE - 1))
 #define pmd_offset(x)	((((x) & PMD_MASK) >> PMD_SHIFT) & 0x1ff)
 
-#define PTRS_PER_TABLE	512
+#define PTRS_PER_TABLE		512
 
-#define MAX_PHYS_ADDR	(0xffffffffffffffffUL)
+#define MAX_PHYS_ADDR		(0xffffffffffffffffUL)
 
-#define PAGE_OFFSET 	0xffffffff80000000UL
+#define PAGE_OFFSET 		0xffffffff80000000UL
 
-#define pte_present(p)	(p & PG_PRESENT)
+#define FRAMES_PER_2M_PAGE	((2 * BIG_PAGE_SIZE) / PAGE_SIZE)
+
+#define pg_present(p)	(p & PG_PRESENT)
 
 #endif /* !_PAGE_TYPES_H */

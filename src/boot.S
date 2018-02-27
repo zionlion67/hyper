@@ -194,6 +194,7 @@ boot_pud:
 boot_pmd:
 	.quad	0x0000000000000083	/* 0MB - 2MB */
 	.quad	0x0000000000200083	/* 2MB - 4MB */
+	.fill	510, 8, 0
 
 	.section .bss
 stack:
