@@ -20,9 +20,8 @@ isr_stub_common:
 	pushq	%rdx
 	pushq	%rdi
 	pushq	%rsi
+	pushq	%rbp
 
-	//pushl	%ds
-	//pushl	%es
 	pushw	%fs
 	pushw	%gs
 
@@ -32,8 +31,6 @@ isr_stub_common:
 	addq	$8, %rsp
 	popw	%gs
 	popw	%fs
-	//popl	%es
-	//popl	%ds
 	popq	%rsi
 	popq	%rdi
 	popq	%rdx

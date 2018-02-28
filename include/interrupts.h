@@ -18,6 +18,7 @@ struct irq_frame {
 	u64	irq;
 	u16	gs;
 	u16	fs;
+	u64	rbp;
 	u64	rsi;
 	u64	rdi;
 	u64	rdx;
@@ -36,7 +37,7 @@ struct idt_gate {
 	union {
 		u64	gate;
 		struct	{
-			u16	offset_lo;	
+			u16	offset_lo;
 			u16	selector;
 			u8	ist : 3;
 			u8	zero : 5;

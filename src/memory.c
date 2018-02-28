@@ -1,38 +1,6 @@
 #include <page.h>
 #include <x86.h>
 
-static inline pgd_t *kernel_pgd(void)
-{
-	return (pgd_t *)phys_to_virt(read_cr3() & PAGE_MASK);
-}
-
-static inline pud_t *kernel_pud(void)
-{
-	const pgd_t *pgd = kernel_pgd();
-	const u64 off = pgd_offset(PAGE_OFFSET);
-	return (pud_t *)phys_to_virt(pgd[off] & PAGE_MASK);
-}
-
-static pmd_t *kernel_pmd(void)
-{
-	const pud_t *pud = kernel_pud();
-	const u64 off = pud_offset(PAGE_OFFSET);
-	return (pmd_t *)phys_to_virt(pud[off] & PAGE_MASK);
-}
-
-static inline void map_frames(pmd_t *pmd, struct page_frame *f, u64 n, u32 flags)
-{
-	for (u64 i = 0; i < n; ++i, f += FRAMES_PER_2M_PAGE) {
-		pmd[i] = page_to_phys(f);
-		pmd[i] |= flags;
-	}
-}
-
-static inline void map_frame(pmd_t *pmd, struct page_frame *f, u32 flags)
-{
-	map_frames(pmd, f, 1, flags);
-}
-
 /*
  * Allocates pages in kernel space.
  *
@@ -41,9 +9,6 @@ static inline void map_frame(pmd_t *pmd, struct page_frame *f, u32 flags)
  */
 void *alloc_pages(u64 n)
 {
-	if (n == 0)
-		return NULL;
-
 	u64 off;
 	pmd_t *pmd = kernel_pmd();
 
@@ -59,27 +24,15 @@ void *alloc_pages(u64 n)
 		else
 			break;
 	}
-
-	/*
-	 * For the moment, only allow allocations within the kernel 1G mapping.
-	 * This means we have 1G - 4MB of free memory. ATM, 4MB are sufficient
-	 * to hold the whole kernel and the page frame array.
-	 */
 	if (off > PTRS_PER_TABLE - n)
 		return NULL;
 
 	struct page_frame *f = alloc_page_frames(pmd + off, n * FRAMES_PER_2M_PAGE);
-	//TODO try to allocate non-contiguous 2MB physical pages
 	if (f == NULL)
 		return NULL;
 
 	map_frames(pmd + off, f, n, PG_PRESENT|PG_WRITABLE|PG_HUGE_PAGE);
 	return (void *)phys_to_virt(page_to_phys(f));
-}
-
-void *alloc_page(void)
-{
-	return alloc_pages(1);
 }
 
 void release_pages(void *p, u64 n)
@@ -93,9 +46,4 @@ void release_pages(void *p, u64 n)
 		release_page_frames(f, FRAMES_PER_2M_PAGE);
 		*entry &= ~PG_PRESENT;
 	}
-}
-
-void release_page(void *p)
-{
-	release_pages(p, 1);
 }

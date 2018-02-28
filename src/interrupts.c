@@ -84,7 +84,10 @@ static void dump_context(const struct irq_frame *f)
 	X(rsi);
 	X(rdi);
 	X(rsp);
+	X(rbp);
 	X(rip);
+	X(rflags);
+	X(error_code);
 #undef X
 	printf("CR2: ");
 	print64(read_cr2());
@@ -115,8 +118,6 @@ int init_idt(void)
 		.base = (u64)idt,
 	};
 
-
 	asm volatile ("lidt %0" : /* No outputs */ : "m"(idtr) : "memory");
-	asm volatile ("sti");
 	return 0;
 }
