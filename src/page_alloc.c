@@ -95,32 +95,37 @@ struct page_frame *pfn_to_page(u64 pfn)
 	return first_frame + pfn;
 }
 
+static void set_frames_used(struct page_frame *start, struct page_frame *end,
+			    vaddr_t vaddr)
+{
+	for (struct page_frame *tmp = start; tmp < end; ++tmp) {
+		tmp->vaddr = vaddr;
+		list_remove(&tmp->free_list);
+		vaddr += PAGE_SIZE;
+	}
+
+}
+
 #define PAGE_FRAME_ENTRY(l)	list_entry((l), struct page_frame, free_list)
 
 /* Very dummy allocator */
 /* Allocates n contiguous page frames */
-struct page_frame *alloc_page_frames(vaddr_t vaddr, u64 n)
+struct page_frame *alloc_page_frames(vaddr_t vaddr, u64 nb_frame)
 {
 	struct list *l;
 	list_for_each_reverse(&frame_free_list, l) {
 		struct page_frame *start = PAGE_FRAME_ENTRY(l);
 		struct page_frame *end;
+		u64 n = nb_frame;
 		for (end = start; end < last_frame && n > 0; ++end, --n) {
 			/* frame isn't free */
 			if (list_empty(&end->free_list))
 				break;
 		}
-
 		if (n > 0)
 			continue;
-
 		/* we found contigous frames */
-		for (struct page_frame *tmp = start; tmp < end; ++tmp) {
-			tmp->vaddr = vaddr;
-			list_remove(&tmp->free_list);
-			vaddr += PAGE_SIZE;
-		}
-
+		set_frames_used(start, end, vaddr);
 		return start;
 	}
 	return NULL;
@@ -133,6 +138,7 @@ void release_page_frames(struct page_frame *f, u64 n)
 		list_add(&frame_free_list, &f[i].free_list);
 	}
 }
+
 
 /* Build page frame array and init free frames list */
 int memory_init(struct multiboot_tag_mmap *mmap)
@@ -153,18 +159,18 @@ int memory_init(struct multiboot_tag_mmap *mmap)
 	pmd_t *pmd = kernel_pmd();
 	u64 cnt = 0;
 	for (struct page_frame *f = first_frame; f < last_frame; ++f) {
+		/* check if frame is on two different page */
 		u64 pmd_off = pmd_offset((vaddr_t)f + sizeof(struct page_frame));
 		if (!pg_present(pmd[pmd_off])) {
 			pmd_t new = pmd[pmd_off - 1] + 2 * BIG_PAGE_SIZE;
 			pmd[pmd_off] = new & ~(PG_ACCESSED|PG_DIRTY);
 		}
-
 		const paddr_t paddr = page_to_phys(f);
 		list_init(&f->free_list);
 		if (!(paddr_mem_flags(paddr) & MEM_RAM_USABLE))
 			continue;
-
 		f->vaddr = (vaddr_t)NULL;
+		/* don't add physical memory used by kernel and frame array */
 		if (paddr < virt_to_phys(_start) || paddr >= virt_to_phys(last_frame))
 			list_add(&frame_free_list, &f->free_list);
 		cnt++;
