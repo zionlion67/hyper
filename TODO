@@ -1,10 +1,4 @@
-- When we raise the amount of RAM of the VM (i.e 4G) the page frame array
-  does not fits in the boot 4M mapping.
-
---> Map all the frame array to the kernel address space !!!
---> Map necessary physical memory after the kernel, dont forget to map the frames
-
-- kmalloc/kfree
+- finish kmalloc/kfree
 
 - non physically contiguous multiple page mappings
 

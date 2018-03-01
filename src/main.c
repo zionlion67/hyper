@@ -6,6 +6,7 @@
 #include <multiboot2.h>
 #include <page.h>
 #include <memory.h>
+#include <kmalloc.h>
 
 static int multiboot2_valid(u32 magic, u32 info_addr)
 {
@@ -77,17 +78,20 @@ void hyper_main(u32 magic, u32 info_addr)
 
 	init_idt();
 	memory_init(mmap);
-	char *s = alloc_page();
+	init_kmalloc();
+	char *s = kmalloc(26);
+	if (!s) {
+		printf("kmalloc failed\n");
+		goto halt;
+	}
 	for (int i = 0; i < 26; ++i)
 		s[i] = 'a' + i;
 	printf("%s\n", s);
-	release_page(s);
+	kfree(s);
 	asm volatile ("int $0");
 
-#if 0
-	init_paging();
 
+halt:
 	for (;;)
 		asm volatile ("hlt");
-#endif
 }

@@ -2,6 +2,9 @@
 #define _MEMORY_H_
 
 #include <types.h>
+#include <page_types.h>
+
+#define ALLOC_PAGE_SIZE	(2 * BIG_PAGE_SIZE)
 
 void *alloc_pages(u64 n);
 void release_pages(void *p, u64 n);
