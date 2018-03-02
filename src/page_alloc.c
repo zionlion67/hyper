@@ -157,8 +157,14 @@ int memory_init(struct multiboot_tag_mmap *mmap)
 	last_frame = first_frame + frame_count;
 
 	pmd_t *pmd = kernel_pmd();
-	paddr_t reserved_end = pmd[pmd_offset((vaddr_t)last_frame)] & PAGE_MASK;
-	u64 cnt = 0;
+	u64 cnt;
+	for (cnt = 0; pg_present((vaddr_t)(pmd + cnt)); ++cnt)
+		continue;
+
+	paddr_t end = pmd[cnt] & PAGE_MASK;
+	u64 last_frame_off = pmd_offset((vaddr_t)last_frame);
+	paddr_t reserved_end = end + (last_frame_off - cnt) * 2 * BIG_PAGE_SIZE;
+
 	for (struct page_frame *f = first_frame; f < last_frame; ++f) {
 		/* check if frame is on two different page */
 		u64 pmd_off = pmd_offset((vaddr_t)f + sizeof(struct page_frame));
@@ -166,10 +172,12 @@ int memory_init(struct multiboot_tag_mmap *mmap)
 			pmd_t new = pmd[pmd_off - 1] + 2 * BIG_PAGE_SIZE;
 			pmd[pmd_off] = new & ~(PG_ACCESSED|PG_DIRTY);
 		}
+
 		const paddr_t paddr = page_to_phys(f);
 		list_init(&f->free_list);
 		if (!(paddr_mem_flags(paddr) & MEM_RAM_USABLE))
 			continue;
+
 		f->vaddr = (vaddr_t)NULL;
 		/* don't add physical memory used by kernel and frame array */
 		if (paddr < virt_to_phys(_start) || paddr >= reserved_end)
