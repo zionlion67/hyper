@@ -38,7 +38,7 @@ all: $(ISO)
 iso: $(ISO)
 
 run: $(ISO)
-	qemu-system-x86_64 -cdrom $(ISO) -enable-kvm -serial stdio
+	qemu-system-x86_64 -cdrom $(ISO) -enable-kvm -serial stdio -m 4G
 
 debug: $(ISO)
 	qemu-system-x86_64 -cdrom $(ISO) -serial stdio -s -S

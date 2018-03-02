@@ -79,7 +79,7 @@ void hyper_main(u32 magic, u32 info_addr)
 	init_idt();
 	memory_init(mmap);
 	init_kmalloc();
-	char *s = kmalloc(26);
+	char *s = kmalloc((3 << 20));
 	if (!s) {
 		printf("kmalloc failed\n");
 		goto halt;
