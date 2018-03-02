@@ -88,6 +88,12 @@ void hyper_main(u32 magic, u32 info_addr)
 		s[i] = 'a' + i;
 	printf("%s\n", s);
 	kfree(s);
+	for (int i = 0; i < 3; ++i) {
+		char *toto = kmalloc(32);
+		print64((vaddr_t)toto);
+		printf("\n");
+		kfree(toto);
+	}
 	asm volatile ("int $0");
 
 

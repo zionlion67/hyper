@@ -96,10 +96,13 @@ void *kmalloc(u64 size)
 	return (void *)(chk + 1);
 }
 
-//TODO implement me !
 void kfree(void *p)
 {
-	(void)p;
+	if (p == NULL)
+		return;
+	struct mem_chunk *chunk = (vaddr_t)p - sizeof(struct mem_chunk);
+	struct mem_arena *arena = __align((vaddr_t)chunk, ARENA_SIZE);
+	list_add(&arena->free_chunks, &chunk->free_chunks);
 }
 
 int init_kmalloc(void)
