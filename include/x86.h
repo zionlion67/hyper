@@ -14,12 +14,16 @@
 #define MSR_EFER_LME_BIT	8
 #define MSR_EFER_LME		(1 << MSR_EFER_LME_BIT)
 
+#define MSR_FEATURE_CONTROL			0x003a
+#define MSR_FEATURE_CONTROL_LOCK		0x0001
+#define MSR_FEATURE_CONTROL_VMXON_OUTSIDE_SMX	0x0004
+
 
 #define __readq(reg)				\
 ({						\
  	u64 __ret;				\
 	asm volatile ("movq %%" #reg ", %0"	\
-		      : "=g"(__ret) ::); 	\
+		      : "=r"(__ret) ::); 	\
 	__ret;					\
 })
 
@@ -39,5 +43,27 @@
 #define write_cr0(x) __writeq(cr0, (x))
 #define write_cr3(x) __writeq(cr3, (x))
 #define write_cr4(x) __writeq(cr4, (x))
+
+#define __readmsr(idx)				\
+({						\
+ 	u64 __ret;				\
+ 	u32 __a, __d;				\
+ 	asm volatile ("rdmsr"			\
+		      : "=d"(__d), "=a"(__a) 	\
+		      : "c"(idx)		\
+		      :				\
+		     );				\
+	__ret = (((u64)__d << 32)|((u64)__a));	\
+	__ret;					\
+})
+
+#define __writemsr(idx, val)			\
+do {						\
+	asm volatile ("wrmsr"			\
+		      : /* No outputs */	\
+		      : "c"(idx), "d"(val >> 32), "a"(val)	\
+		      :				\
+		     );				\
+} while (0)
 
 #endif /* !_X86_H_ */

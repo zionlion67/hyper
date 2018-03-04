@@ -7,6 +7,7 @@
 #include <page.h>
 #include <memory.h>
 #include <kmalloc.h>
+#include <vmx.h>
 
 static int multiboot2_valid(u32 magic, u32 info_addr)
 {
@@ -79,25 +80,16 @@ void hyper_main(u32 magic, u32 info_addr)
 	init_idt();
 	memory_init(mmap);
 	init_kmalloc();
-	char *s = kmalloc((3 << 20));
-	if (!s) {
-		printf("kmalloc failed\n");
-		goto halt;
-	}
-	for (int i = 0; i < 26; ++i)
-		s[i] = 'a' + i;
-	printf("%s\n", s);
-	kfree(s);
 	for (int i = 0; i < 3; ++i) {
 		char *toto = kmalloc(32);
 		print64((vaddr_t)toto);
 		printf("\n");
 		kfree(toto);
 	}
+	if (has_vmx_support())
+		printf("VMX supported !\n");
 	asm volatile ("int $0");
 
-
-halt:
 	for (;;)
 		asm volatile ("hlt");
 }

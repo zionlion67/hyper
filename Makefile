@@ -11,7 +11,8 @@ OBJS = src/boot.o 	\
        src/interrupts.o \
        src/page_alloc.o \
        src/memory.o	\
-       src/kmalloc.o
+       src/kmalloc.o	\
+       src/vmx.o
 
 LIBC_DIR=src/libc
 LIBC_OBJS=$(LIBC_DIR)/printf.o \
@@ -38,7 +39,7 @@ all: $(ISO)
 iso: $(ISO)
 
 run: $(ISO)
-	qemu-system-x86_64 -cdrom $(ISO) -enable-kvm -serial stdio -m 4G
+	qemu-system-x86_64 -cdrom $(ISO) -cpu host -enable-kvm -serial stdio -m 4G
 
 debug: $(ISO)
 	qemu-system-x86_64 -cdrom $(ISO) -serial stdio -s -S
