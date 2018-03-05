@@ -88,6 +88,8 @@ void hyper_main(u32 magic, u32 info_addr)
 	}
 	if (has_vmx_support())
 		printf("VMX supported !\n");
+	struct vmm vmm;
+	vmm_init(&vmm);
 	asm volatile ("int $0");
 
 	for (;;)
