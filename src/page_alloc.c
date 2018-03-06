@@ -24,6 +24,8 @@ u64 last_pfn;
 extern char _start[];
 extern char _end[];
 
+#define _2M_PAGE_SIZE	(2 * BIG_PAGE_SIZE)
+
 /* ATM only get available regions */
 static void init_memory_map(struct multiboot_tag_mmap *mmap)
 {
@@ -164,18 +166,18 @@ int memory_init(struct multiboot_tag_mmap *mmap)
 		continue;
 	}
 
-	paddr_t end = pmd[cnt] & PAGE_MASK;
+	paddr_t end = (pmd[cnt] & PAGE_MASK) + _2M_PAGE_SIZE;
 	u64 last_frame_off = pmd_offset((vaddr_t)last_frame);
-	if (cnt >= last_frame_off)
+	if (cnt > last_frame_off)
 		last_frame_off = cnt + 1;
-	paddr_t reserved_end = end + (last_frame_off - cnt) * 2 * BIG_PAGE_SIZE;
+	paddr_t reserved_end = end + (last_frame_off - cnt) * _2M_PAGE_SIZE;
 
 	cnt = 0;
 	for (struct page_frame *f = first_frame; f < last_frame; ++f) {
 		/* check if frame is on two different page */
 		u64 pmd_off = pmd_offset((vaddr_t)f + sizeof(struct page_frame));
 		if (!pg_present(pmd[pmd_off])) {
-			pmd_t new = pmd[pmd_off - 1] + 2 * BIG_PAGE_SIZE;
+			pmd_t new = pmd[pmd_off - 1] + _2M_PAGE_SIZE;
 			pmd[pmd_off] = new & ~(PG_ACCESSED|PG_DIRTY);
 		}
 
