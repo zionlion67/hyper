@@ -57,20 +57,11 @@ static int alloc_vmcs(struct vmm *vmm)
 	return 0;
 }
 
-static inline int __vmx_on(paddr_t vmx_on_paddr)
+static inline void release_vmcs(struct vmcs *vmcs)
 {
-	printf("0x%lx\n", vmx_on_paddr);
-	asm volatile goto ("vmxon %0\n\t"
-			   "jbe %l1"
-			   :
-			   : "m"(vmx_on_paddr)
-			   :
-			   : fail
-			   );
-	return 0;
-fail:
-	return 1;
+	release_page(vmcs);
 }
+
 
 #define VMM_IDX(idx) 		((idx) - MSR_VMX_BASIC)
 #define VMM_MSR_VMX_BASIC	VMM_IDX(MSR_VMX_BASIC)
@@ -100,10 +91,25 @@ int vmm_init(struct vmm *vmm)
 
 	if (__vmx_on(virt_to_phys(vmm->vmx_on))) {
 		printf("VMXON failed\n");
-		return 1;
+		goto free_vmcs;
+	}
+
+	paddr_t vmcs_paddr = virt_to_phys(vmm->vmcs);
+	if (__vmclear(vmcs_paddr)) {
+		printf("VMCLEAR failed\n");
+		goto free_vmcs;
+	}
+
+	if (__vmptrld(vmcs_paddr)) {
+		printf("VMPTRLD failed\n");
+		goto free_vmcs;
 	}
 
 	printf("Hello from VMX ROOT\n");
-		
+
 	return 0;
+
+free_vmcs:
+	release_vmcs(vmm->vmcs);
+	return 1;
 }
