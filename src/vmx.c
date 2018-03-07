@@ -62,6 +62,55 @@ static inline void release_vmcs(struct vmcs *vmcs)
 	release_page(vmcs);
 }
 
+#define _1GB	(1024 * 1024 * 1024)
+
+/* Write back memory */
+#define EPT_MEMORY_TYPE_WB	0x6
+
+/* Build EPT structures. XXX: ATM, only 1GB RWX pages */
+static int setup_ept_range(struct vmm *vmm, paddr_t host_start, paddr_t host_end,
+			   paddr_t guest_start)
+{
+	/*
+	 * vmx_on and vmcs are stored on a 2MB page ...
+	 * There is 2MB - 8KB of space left for EPT structures.
+	 */
+	struct ept_pml4e *ept_pml4 = (vaddr_t)vmm->vmx_on + 2 * PAGE_SIZE;
+	struct ept_huge_pdpte *ept_pdpt = (vaddr_t)ept_pml4 + PAGE_SIZE;
+
+	u64 nb_1g_page = (host_end - host_start) / _1GB + 1;
+
+	struct ept_pml4e *pml4e = ept_pml4 + pmd_offset(guest_start);
+	pml4e->read = 1;
+	pml4e->write = 1;
+	pml4e->kern_exec = 1;
+	pml4e->paddr = virt_to_phys(ept_pdpt) >> PAGE_SHIFT;
+
+	struct ept_huge_pdpte *huge_pdpte = ept_pdpt + pud_offset(guest_start);
+	for (u64 i = 0; i < EPT_PTRS_PER_TABLE && i < nb_1g_page; ++i) {
+		huge_pdpte->read = 1;
+		huge_pdpte->write = 1;
+		huge_pdpte->kern_exec = 1;
+		huge_pdpte->memory_type = EPT_MEMORY_TYPE_WB;
+		huge_pdpte->ignore_pat = 1;
+		huge_pdpte->paddr = host_start + i * _1GB;
+	}
+
+	return 0;
+}
+
+/* XXX: ATM allocates 203M of memory for the VM */
+static int setup_ept(struct vmm *vmm)
+{
+	u8 nb_pages = 10;
+	void *p = alloc_pages(nb_pages);
+	if (p == NULL)
+		return 1;
+
+	paddr_t start = virt_to_phys(p);
+	paddr_t end = start + nb_pages * ALLOC_PAGE_SIZE;
+	return setup_ept_range(vmm, start, end, 0);
+}
 
 #define VMM_IDX(idx) 		((idx) - MSR_VMX_BASIC)
 #define VMM_MSR_VMX_BASIC	VMM_IDX(MSR_VMX_BASIC)
@@ -88,6 +137,8 @@ int vmm_init(struct vmm *vmm)
 	cr4 |= CR4_VMXE;
 	cr4 |= vmm->vmx_msr[VMM_MSR_VMX_CR4_FIXED0];
 	write_cr4(cr4);
+
+	setup_ept(vmm);
 
 	if (__vmx_on(virt_to_phys(vmm->vmx_on))) {
 		printf("VMXON failed\n");

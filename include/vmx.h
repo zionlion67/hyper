@@ -2,6 +2,7 @@
 #define _VMX_H_
 
 #include "x86.h"
+#include "ept.h"
 
 #define NR_VMX_MSR 17
 
@@ -11,6 +12,8 @@ struct vmm {
 
 	struct vmcs *vmx_on;
 	struct vmcs *vmcs;
+
+	struct eptp eptp;
 };
 
 int has_vmx_support(void);
