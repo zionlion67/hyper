@@ -1,6 +1,7 @@
 #include <cpuid.h>	/* compiler header */
 
 #include <compiler.h>
+#include <gdt.h>
 #include <page.h>
 #include <memory.h>
 #include <string.h>
@@ -113,6 +114,89 @@ static int setup_ept(struct vmm *vmm)
 	return setup_ept_range(vmm, start, end, 0);
 }
 
+struct segment_selectors {
+	u16	cs;
+	u16	ds;
+	u16	es;
+	u16	ss;
+	u16	fs;
+	u16	gs;
+};
+
+/* Loaded during VM-exits */
+struct vmcs_host_state {
+	u64	cr0;
+	u64	cr3;
+	u64	cr4;
+
+	struct segment_selectors selectors;
+
+	u64	tr_base;
+	u64	gdtr_base;
+	u64	idtr_base;
+
+	u32	ia32_sysenter_cs;
+	u64	ia32_fs_base;
+	u64	ia32_gs_base;
+	u64	ia32_sysenter_esp;
+	u64	ia32_sysenter_eip;
+	u64	ia32_perf_global_ctrl;
+	u64	ia32_pat;
+	u64	ia32_efer;
+
+	u64	rsp;
+	u64	rip;
+};
+
+static void vmcs_get_host_selectors(struct segment_selectors *sel)
+{
+	sel->cs = read_cs();
+	sel->ds = read_ds();
+	sel->es = read_es();
+	sel->ss = read_ss();
+	sel->fs = read_fs();
+	sel->gs = read_gs();
+}
+
+#define JUNK_ADDR 0xdeadbeef
+static void vmcs_get_host_state(struct vmcs_host_state *state)
+{
+	state->cr0 = read_cr0();
+	state->cr3 = read_cr3();
+	state->cr4 = read_cr4();
+
+	vmcs_get_host_selectors(&state->selectors);
+
+	struct gdtr gdtr;
+	__sgdt(&gdtr);
+	state->gdtr_base = gdtr.base;
+
+	__sidt(&gdtr); /* gdtr has the same memory layout */
+	state->idtr_base = gdtr.base;
+
+	//TODO ADD TSS --> TR_BASE
+
+	state->ia32_fs_base = __readmsr(MSR_FS_BASE);
+	state->ia32_gs_base = __readmsr(MSR_GS_BASE);
+	state->ia32_sysenter_cs = __readmsr(MSR_SYSENTER_CS);
+	state->ia32_sysenter_esp = __readmsr(MSR_SYSENTER_ESP);
+	state->ia32_sysenter_eip = __readmsr(MSR_SYSENTER_EIP);
+	state->ia32_perf_global_ctrl = __readmsr(MSR_PERF_GLOBAL_CTRL);
+	state->ia32_pat = __readmsr(MSR_PAT);
+	state->ia32_efer = __readmsr(MSR_EFER);
+
+	state->rsp = JUNK_ADDR;
+	state->rip = JUNK_ADDR;
+}
+
+int vmcs_setup_host_state(struct vmm *vmm)
+{
+	struct vmcs_host_state state;
+	vmcs_get_host_state(&state);
+	(void)vmm;
+	return 0;
+}
+
 #define VMM_IDX(idx) 		((idx) - MSR_VMX_BASIC)
 #define VMM_MSR_VMX_BASIC	VMM_IDX(MSR_VMX_BASIC)
 #define VMM_MSR_VMX_CR0_FIXED0	VMM_IDX(MSR_VMX_CR0_FIXED0)
@@ -138,6 +222,8 @@ int vmm_init(struct vmm *vmm)
 	cr4 |= CR4_VMXE;
 	cr4 |= vmm->vmx_msr[VMM_MSR_VMX_CR4_FIXED0];
 	write_cr4(cr4);
+
+	vmcs_setup_host_state(vmm);
 
 	if (setup_ept(vmm)) {
 		printf("Failed to setup EPT\n");

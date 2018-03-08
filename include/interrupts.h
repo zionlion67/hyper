@@ -13,7 +13,6 @@
 #define IDT_INTR_GATE_TYPE 14
 #define IDT_TRAP_GATE_TYPE 15
 
-
 struct irq_frame {
 	u64	irq;
 	u16	gs;

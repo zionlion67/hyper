@@ -21,6 +21,15 @@
 #define MSR_FEATURE_CONTROL_LOCK		0x0001
 #define MSR_FEATURE_CONTROL_VMXON_OUTSIDE_SMX	0x0004
 
+#define MSR_SYSENTER_CS		0x174
+#define MSR_SYSENTER_ESP	0x175
+#define MSR_SYSENTER_EIP	0x176
+
+#define MSR_PAT			0x277
+#define MSR_PERF_GLOBAL_CTRL	0x38f
+#define MSR_FS_BASE		0xc0000100
+#define MSR_GS_BASE		0xc0000101
+
 #define MSR_VMX_BASIC		0x480
 #define MSR_VMX_PIN_CTLS	0x481
 #define MSR_VMX_PROC_CTLS	0x482
@@ -40,6 +49,8 @@
 #define MSR_VMX_TRUE_ENTRY_CTLS 0x490
 #define MSR_VMX_VMFUNC		0x491
 
+#ifndef __ASM__
+#include <gdt.h>
 #define __readq(reg)				\
 ({						\
  	u64 __ret;				\
@@ -56,14 +67,32 @@
 		      : "memory");		\
 })
 
-#define read_cr0() __readq(cr0)
-#define read_cr2() __readq(cr2)
-#define read_cr3() __readq(cr3)
-#define read_cr4() __readq(cr4)
+#define __readw(reg)				\
+({						\
+ 	u16 __ret;				\
+	asm volatile ("movw %%" #reg ", %0"	\
+		      : "=r"(__ret) ::); 	\
+	__ret;					\
+})
 
-#define write_cr0(x) __writeq(cr0, (x))
-#define write_cr3(x) __writeq(cr3, (x))
-#define write_cr4(x) __writeq(cr4, (x))
+
+#define read_cr0() 	__readq(cr0)
+#define read_cr2() 	__readq(cr2)
+#define read_cr3() 	__readq(cr3)
+#define read_cr4() 	__readq(cr4)
+
+#define read_cs() 	__readw(cs)
+#define read_ds() 	__readw(ds)
+#define read_es() 	__readw(es)
+#define read_ss() 	__readw(ss)
+#define read_fs() 	__readw(fs)
+#define read_gs() 	__readw(gs)
+
+/* TODO static inline write to reg wrapper */
+#define write_cr0(x)	__writeq(cr0, (x))
+#define write_cr3(x) 	__writeq(cr3, (x))
+#define write_cr4(x) 	__writeq(cr4, (x))
+
 
 #define EAX_EDX_VAL(low, high) ((low) | (high) << 32)
 
@@ -89,4 +118,15 @@ do {						\
 		     );				\
 } while (0)
 
+static inline void __sidt(struct gdtr *gdtr)
+{
+	asm volatile ("sidt %0" : : "m"(*gdtr));
+}
+
+static inline void __sgdt(struct gdtr *gdtr)
+{
+	asm volatile ("sgdt %0" : : "m"(*gdtr));
+}
+
+#endif /* !__ASM__ */
 #endif /* !_X86_H_ */

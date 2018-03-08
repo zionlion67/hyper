@@ -1,6 +1,8 @@
 #ifndef _ASM_H_
 #define _ASM_H_
 
+#define __ASM__
+
 #define ASM_NL ;
 
 #define ASM_ALIGN .align 8

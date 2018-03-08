@@ -9,4 +9,13 @@
 #define __KERNEL_DS		(GDT_ENTRY_KERNEL_DS*8)
 #define __TSS_ENTRY		(GDT_ENTRY_TSS*8)
 
-#endif
+#ifndef __ASM__
+#include "types.h"
+struct gdtr {
+	u16 limit;
+	u64 base;
+} __packed;
+
+#endif /* __ASM__ */
+
+#endif /* !_GDT_H_ */

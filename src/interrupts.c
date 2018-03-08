@@ -7,15 +7,15 @@ irqhandler_t interrupt_handlers[NR_INTERRUPTS];
 
 static struct idt_gate idt[NR_INTERRUPTS];
 
-struct idtr {
-	u16 limit;
-	u64 base;
-} __packed;
-
 struct exception_str {
 	const char *name;
 	const char *abbr;
 };
+
+struct idtr {
+	u16 limit;
+	u64 base;
+} __packed;
 
 #define EX_STR(Name, Abbr) \
 	{ .name = Name, .abbr = Abbr }
