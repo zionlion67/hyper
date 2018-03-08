@@ -64,7 +64,7 @@ static inline void release_vmcs(struct vmcs *vmcs)
 
 #define _1GB	(1024 * 1024 * 1024)
 
-/* Write back memory */
+/* Write back caching */
 #define EPT_MEMORY_TYPE_WB	0x6
 
 /* Build EPT structures. XXX: ATM, only 1GB RWX pages */
@@ -93,13 +93,14 @@ static int setup_ept_range(struct vmm *vmm, paddr_t host_start, paddr_t host_end
 		huge_pdpte->kern_exec = 1;
 		huge_pdpte->memory_type = EPT_MEMORY_TYPE_WB;
 		huge_pdpte->ignore_pat = 1;
+		huge_pdpte->huge_page = 1;
 		huge_pdpte->paddr = host_start + i * _1GB;
 	}
 
 	return 0;
 }
 
-/* XXX: ATM allocates 203M of memory for the VM */
+/* XXX: ATM allocates 200M of memory for the VM */
 static int setup_ept(struct vmm *vmm)
 {
 	u8 nb_pages = 10;
@@ -138,7 +139,10 @@ int vmm_init(struct vmm *vmm)
 	cr4 |= vmm->vmx_msr[VMM_MSR_VMX_CR4_FIXED0];
 	write_cr4(cr4);
 
-	setup_ept(vmm);
+	if (setup_ept(vmm)) {
+		printf("Failed to setup EPT\n");
+		goto free_vmcs;
+	}
 
 	if (__vmx_on(virt_to_phys(vmm->vmx_on))) {
 		printf("VMXON failed\n");
