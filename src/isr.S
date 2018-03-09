@@ -31,6 +31,7 @@ isr_stub_common:
 	addq	$8, %rsp
 	popw	%gs
 	popw	%fs
+	popq	%rbp
 	popq	%rsi
 	popq	%rdi
 	popq	%rdx
