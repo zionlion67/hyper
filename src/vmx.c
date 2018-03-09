@@ -207,6 +207,38 @@ int vmcs_setup_host_state(struct vmm *vmm)
 #define VMM_MSR_VMX_CR4_FIXED0	VMM_IDX(MSR_VMX_CR4_FIXED0)
 #define VMM_MSR_VMX_CR4_FIXED1	VMM_IDX(MSR_VMX_CR4_FIXED1)
 
+static inline void vmcs_write_control(struct vmm *vmm, enum vmcs_field field,
+				      u64 ctl, u64 ctl_msr)
+{
+	u64 ctl_mask = vmm->vmx_msr[VMM_IDX(ctl_msr)];
+	__vmwrite(field, adjust_vm_control(ctl, ctl_mask));
+}
+
+static inline void vmcs_write_pin_based_ctrls(struct vmm *vmm, u64 ctl)
+{
+	vmcs_write_control(vmm, PIN_BASED_VM_EXEC_CONTROL, ctl, MSR_VMX_PIN_CTLS);
+}
+
+static inline void vmcs_write_proc_based_ctrls(struct vmm *vmm, u64 ctl)
+{
+	vmcs_write_control(vmm, CPU_BASED_VM_EXEC_CONTROL, ctl, MSR_VMX_PROC_CTLS);
+}
+
+static inline void vmcs_write_proc_based_ctrls2(struct vmm *vmm, u64 ctl)
+{
+
+	vmcs_write_control(vmm, SECONDARY_VM_EXEC_CONTROL, ctl, MSR_VMX_PROC_CTLS2);
+}
+
+static void vmcs_write_vm_exec_controls(struct vmm *vmm)
+{
+	vmcs_write_pin_based_ctrls(vmm, 0);
+	vmcs_write_proc_based_ctrls(vmm, ENABLE_SECONDARY_EXEC_CTLS);
+	vmcs_write_proc_based_ctrls2(vmm, ENABLE_EPT|UNRESTRICTED_GUEST);
+
+	__vmwrite(EXCEPTION_BITMAP, 0);
+}
+
 int vmm_init(struct vmm *vmm)
 {
 	vmm_read_vmx_msrs(vmm);
@@ -248,6 +280,8 @@ int vmm_init(struct vmm *vmm)
 		printf("VMPTRLD failed\n");
 		goto free_vmcs;
 	}
+
+	vmcs_write_vm_exec_controls(vmm);
 
 	printf("Hello from VMX ROOT\n");
 

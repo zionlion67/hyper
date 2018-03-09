@@ -47,6 +47,10 @@ int vmm_init(struct vmm *);
 #define __vmclear(paddr)	__vmx_insn_paddr(vmclear, paddr)
 #define __vmptrld(paddr)	__vmx_insn_paddr(vmptrld, paddr)
 
+#define ENABLE_SECONDARY_EXEC_CTLS	(1 << 31)
+#define ENABLE_EPT			(1 << 1)
+#define UNRESTRICTED_GUEST		(1 << 7)
+
 /* Enum is copy-pasted from SimpleVisor */
 enum vmcs_field {
     VIRTUAL_PROCESSOR_ID            = 0x00000000,
@@ -200,15 +204,23 @@ static inline u64 __vmread(enum vmcs_field field)
 
 static inline void __vmwrite(enum vmcs_field field, u64 value)
 {
-	u8 error;
-	asm volatile ("vmwrite %[field], %[value]\n\t"
-		      "setna %[error]"
-		      : [error] "=q"(error)
-		      : [field] "r"(field), [value] "r"(value)
-		      : "cc"
-		     );
-	if (error)
-		printf("VMWRITE failed ...\n");
+	asm volatile goto ("vmwrite %1, %0\n\t"
+		      	   "jbe %l2\n\t"
+		      	   :
+			   : "r"((u64)field), "r"(value)
+			   : "memory"
+			   : fail
+			  );
+	return;
+fail:
+	printf("VMWRITE failed ...\n");
+}
+
+static inline u64 adjust_vm_control(u64 value, u64 ctrl_msr)
+{
+	value |= ctrl_msr & 0xffffffff; /* Required 1-settings */
+	value &= ctrl_msr >> 32;	/* Required 0-settings */
+	return value;
 }
 
 #endif /* !_VMX_H_ */
