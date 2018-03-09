@@ -12,7 +12,8 @@ OBJS = src/boot.o 	\
        src/page_alloc.o \
        src/memory.o	\
        src/kmalloc.o	\
-       src/vmx.o
+       src/tss.o	\
+       src/vmx.o	
 
 LIBC_DIR=src/libc
 LIBC_OBJS=$(LIBC_DIR)/printf.o \

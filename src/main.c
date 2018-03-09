@@ -78,6 +78,7 @@ void hyper_main(u32 magic, u32 info_addr)
 		dump_memory_map(mmap);
 
 	init_idt();
+	load_tss();
 	memory_init(mmap);
 	init_kmalloc();
 	for (int i = 0; i < 3; ++i) {

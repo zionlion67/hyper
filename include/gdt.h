@@ -11,10 +11,13 @@
 
 #ifndef __ASM__
 #include "types.h"
+#include "compiler.h"
 struct gdtr {
 	u16 limit;
 	u64 base;
 } __packed;
+
+void load_tss(void);
 
 #endif /* __ASM__ */
 

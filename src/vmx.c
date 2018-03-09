@@ -13,6 +13,9 @@
 #define bit_VMX	0x20
 #endif
 
+/* TSS definition is not exported */
+extern char tss[];
+
 struct vmcs {
 	u32	rev_id;
 	u32	vmx_abort;
@@ -174,7 +177,7 @@ static void vmcs_get_host_state(struct vmcs_host_state *state)
 	__sidt(&gdtr); /* gdtr has the same memory layout */
 	state->idtr_base = gdtr.base;
 
-	//TODO ADD TSS --> TR_BASE
+	state->tr_base = (u64)tss;
 
 	state->ia32_fs_base = __readmsr(MSR_FS_BASE);
 	state->ia32_gs_base = __readmsr(MSR_GS_BASE);
