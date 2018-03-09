@@ -6,6 +6,40 @@
 
 #define NR_VMX_MSR 17
 
+struct segment_selectors {
+	u16	cs;
+	u16	ds;
+	u16	es;
+	u16	ss;
+	u16	fs;
+	u16	gs;
+};
+
+/* Loaded during VM-exits */
+struct vmcs_host_state {
+	u64	cr0;
+	u64	cr3;
+	u64	cr4;
+
+	struct segment_selectors selectors;
+
+	u64	tr_base;
+	u64	gdtr_base;
+	u64	idtr_base;
+
+	u32	ia32_sysenter_cs;
+	u64	ia32_fs_base;
+	u64	ia32_gs_base;
+	u64	ia32_sysenter_esp;
+	u64	ia32_sysenter_eip;
+	u64	ia32_perf_global_ctrl;
+	u64	ia32_pat;
+	u64	ia32_efer;
+
+	u64	rsp;
+	u64	rip;
+};
+
 struct vmcs;
 struct vmm {
 	u64 vmx_msr[NR_VMX_MSR];
@@ -14,6 +48,7 @@ struct vmm {
 	struct vmcs *vmcs;
 
 	struct eptp eptp;
+	struct vmcs_host_state host_state;
 };
 
 int has_vmx_support(void);
@@ -43,13 +78,13 @@ int vmm_init(struct vmm *);
 })
 
 #define __vmx_on(paddr) 	__vmx_insn_paddr(vmxon, paddr)
-#define __vmx_off(paddr)	__vmx_insn_paddr(vmxoff, paddr)
 #define __vmclear(paddr)	__vmx_insn_paddr(vmclear, paddr)
 #define __vmptrld(paddr)	__vmx_insn_paddr(vmptrld, paddr)
 
-#define ENABLE_SECONDARY_EXEC_CTLS	(1 << 31)
-#define ENABLE_EPT			(1 << 1)
-#define UNRESTRICTED_GUEST		(1 << 7)
+#define VM_EXEC_USE_MSR_BITMAPS			(1 << 28)
+#define VM_EXEC_ENABLE_PROC_CTLS2		(1 << 31)
+#define VM_EXEC_ENABLE_EPT			(1 << 1)
+#define VM_EXEC_UNRESTRICTED_GUEST		(1 << 7)
 
 /* Enum is copy-pasted from SimpleVisor */
 enum vmcs_field {
@@ -194,6 +229,11 @@ enum vmcs_field {
     HOST_RSP                        = 0x00006c14,
     HOST_RIP                        = 0x00006c16,
 };
+
+static inline void __vmx_off(void)
+{
+	asm volatile ("vmxoff");
+}
 
 static inline u64 __vmread(enum vmcs_field field)
 {

@@ -71,9 +71,18 @@ static inline void release_vmcs(struct vmcs *vmcs)
 /* Write back caching */
 #define EPT_MEMORY_TYPE_WB	0x6
 
+static void setup_eptp(struct eptp *eptp, struct ept_pml4e *ept_pml4)
+{
+	eptp->quad_word = 0;
+	eptp->type = EPT_MEMORY_TYPE_WB;
+	eptp->page_walk_length = 1; /* 1G page uses 2 EPT structures */
+	eptp->enable_dirty_flag = 1;
+	eptp->pml4_addr = virt_to_phys(ept_pml4) >> PAGE_SHIFT;
+}
+
 /* Build EPT structures. XXX: ATM, only 1GB RWX pages */
-static int setup_ept_range(struct vmm *vmm, paddr_t host_start, paddr_t host_end,
-			   paddr_t guest_start)
+static void setup_ept_range(struct vmm *vmm, paddr_t host_start,
+			    paddr_t host_end, paddr_t guest_start)
 {
 	/*
 	 * vmx_on and vmcs are stored on a 2MB page ...
@@ -101,8 +110,9 @@ static int setup_ept_range(struct vmm *vmm, paddr_t host_start, paddr_t host_end
 		huge_pdpte->paddr = host_start + i * _1GB;
 	}
 
-	return 0;
+	setup_eptp(&vmm->eptp, ept_pml4);
 }
+
 
 /* XXX: ATM allocates 200M of memory for the VM */
 static int setup_ept(struct vmm *vmm)
@@ -114,42 +124,9 @@ static int setup_ept(struct vmm *vmm)
 
 	paddr_t start = virt_to_phys(p);
 	paddr_t end = start + nb_pages * ALLOC_PAGE_SIZE;
-	return setup_ept_range(vmm, start, end, 0);
+	setup_ept_range(vmm, start, end, 0);
+	return 0;
 }
-
-struct segment_selectors {
-	u16	cs;
-	u16	ds;
-	u16	es;
-	u16	ss;
-	u16	fs;
-	u16	gs;
-};
-
-/* Loaded during VM-exits */
-struct vmcs_host_state {
-	u64	cr0;
-	u64	cr3;
-	u64	cr4;
-
-	struct segment_selectors selectors;
-
-	u64	tr_base;
-	u64	gdtr_base;
-	u64	idtr_base;
-
-	u32	ia32_sysenter_cs;
-	u64	ia32_fs_base;
-	u64	ia32_gs_base;
-	u64	ia32_sysenter_esp;
-	u64	ia32_sysenter_eip;
-	u64	ia32_perf_global_ctrl;
-	u64	ia32_pat;
-	u64	ia32_efer;
-
-	u64	rsp;
-	u64	rip;
-};
 
 static void vmcs_get_host_selectors(struct segment_selectors *sel)
 {
@@ -216,27 +193,35 @@ static inline void vmcs_write_control(struct vmm *vmm, enum vmcs_field field,
 
 static inline void vmcs_write_pin_based_ctrls(struct vmm *vmm, u64 ctl)
 {
-	vmcs_write_control(vmm, PIN_BASED_VM_EXEC_CONTROL, ctl, MSR_VMX_PIN_CTLS);
+	vmcs_write_control(vmm, PIN_BASED_VM_EXEC_CONTROL, ctl,
+			   MSR_VMX_PIN_CTLS);
 }
 
 static inline void vmcs_write_proc_based_ctrls(struct vmm *vmm, u64 ctl)
 {
-	vmcs_write_control(vmm, CPU_BASED_VM_EXEC_CONTROL, ctl, MSR_VMX_PROC_CTLS);
+	vmcs_write_control(vmm, CPU_BASED_VM_EXEC_CONTROL, ctl,
+			   MSR_VMX_PROC_CTLS);
 }
 
 static inline void vmcs_write_proc_based_ctrls2(struct vmm *vmm, u64 ctl)
 {
 
-	vmcs_write_control(vmm, SECONDARY_VM_EXEC_CONTROL, ctl, MSR_VMX_PROC_CTLS2);
+	vmcs_write_control(vmm, SECONDARY_VM_EXEC_CONTROL, ctl,
+			   MSR_VMX_PROC_CTLS2);
 }
 
+/* TODO add MSR Bitmap */
 static void vmcs_write_vm_exec_controls(struct vmm *vmm)
 {
 	vmcs_write_pin_based_ctrls(vmm, 0);
-	vmcs_write_proc_based_ctrls(vmm, ENABLE_SECONDARY_EXEC_CTLS);
-	vmcs_write_proc_based_ctrls2(vmm, ENABLE_EPT|UNRESTRICTED_GUEST);
+	vmcs_write_proc_based_ctrls(vmm, VM_EXEC_ENABLE_PROC_CTLS2);
+	vmcs_write_proc_based_ctrls2(vmm,
+			VM_EXEC_ENABLE_EPT|VM_EXEC_UNRESTRICTED_GUEST);
 
 	__vmwrite(EXCEPTION_BITMAP, 0);
+	__vmwrite(CR0_READ_SHADOW, vmm->host_state.cr0);
+	__vmwrite(CR4_READ_SHADOW, vmm->host_state.cr4);
+	__vmwrite(EPT_POINTER, vmm->eptp.quad_word);
 }
 
 int vmm_init(struct vmm *vmm)
@@ -288,6 +273,7 @@ int vmm_init(struct vmm *vmm)
 	return 0;
 
 free_vmcs:
+	__vmx_off();
 	release_vmcs(vmm->vmcs);
 	return 1;
 }
