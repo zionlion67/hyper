@@ -81,10 +81,35 @@ int vmm_init(struct vmm *);
 #define __vmclear(paddr)	__vmx_insn_paddr(vmclear, paddr)
 #define __vmptrld(paddr)	__vmx_insn_paddr(vmptrld, paddr)
 
+/* VM Execution control fields */
 #define VM_EXEC_USE_MSR_BITMAPS			(1 << 28)
 #define VM_EXEC_ENABLE_PROC_CTLS2		(1 << 31)
 #define VM_EXEC_ENABLE_EPT			(1 << 1)
 #define VM_EXEC_UNRESTRICTED_GUEST		(1 << 7)
+
+/* VM Exit control fields */
+#define VM_EXIT_SAVE_DBG_CTLS			(1 << 2)
+#define VM_EXIT_LONG_MODE			(1 << 9)
+#define VM_EXIT_LOAD_MSR_PERF_GLOBAL		(1 << 12)
+#define VM_EXIT_ACK_INTR_ON_EXIT		(1 << 15)
+#define VM_EXIT_SAVE_MSR_PAT			(1 << 18)
+#define VM_EXIT_LOAD_MSR_PAT			(1 << 19)
+#define VM_EXIT_SAVE_MSR_EFER			(1 << 20)
+#define VM_EXIT_LOAD_MSR_EFER			(1 << 21)
+#define VM_EXIT_SAVE_VMX_TIMER			(1 << 22)
+#define VM_EXIT_CLEAR_MSR_BNDCFGS		(1 << 23)
+#define VM_EXIT_CONCEAL_INTEL_PT		(1 << 24)
+
+/* VM Entry control fields */
+#define VM_ENTRY_LOAD_DBG_CTLS			(1 << 2)
+#define VM_ENTRY_IA32E_GUEST			(1 << 9)
+#define VM_ENTRY_SMM_ENTRY			(1 << 10)
+#define VM_ENTRY_DISABLE_DUAL_MONITOR		(1 << 11)
+#define VM_ENTRY_LOAD_MSR_PERF_GLOBAL		(1 << 13)
+#define VM_ENTRY_LOAD_MSR_PAT			(1 << 14)
+#define VM_ENTRY_LOAD_MSR_EFER			(1 << 15)
+#define VM_ENTRY_LOAD_MSR_BNDCFGS		(1 << 16)
+#define VM_ENTRY_CONCEAL_INTEL_PT		(1 << 17)
 
 /* Enum is copy-pasted from SimpleVisor */
 enum vmcs_field {

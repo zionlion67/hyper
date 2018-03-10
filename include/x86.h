@@ -88,6 +88,8 @@
 #define read_fs() 	__readw(fs)
 #define read_gs() 	__readw(gs)
 
+#define read_rsp()	__readq(rsp)
+
 /* TODO static inline write to reg wrapper */
 #define write_cr0(x)	__writeq(cr0, (x))
 #define write_cr3(x) 	__writeq(cr3, (x))

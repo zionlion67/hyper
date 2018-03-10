@@ -165,15 +165,13 @@ static void vmcs_get_host_state(struct vmcs_host_state *state)
 	state->ia32_pat = __readmsr(MSR_PAT);
 	state->ia32_efer = __readmsr(MSR_EFER);
 
-	state->rsp = JUNK_ADDR;
+	state->rsp = read_rsp();
 	state->rip = JUNK_ADDR;
 }
 
 int vmcs_setup_host_state(struct vmm *vmm)
 {
-	struct vmcs_host_state state;
-	vmcs_get_host_state(&state);
-	(void)vmm;
+	vmcs_get_host_state(&vmm->host_state);
 	return 0;
 }
 
@@ -194,13 +192,13 @@ static inline void vmcs_write_control(struct vmm *vmm, enum vmcs_field field,
 static inline void vmcs_write_pin_based_ctrls(struct vmm *vmm, u64 ctl)
 {
 	vmcs_write_control(vmm, PIN_BASED_VM_EXEC_CONTROL, ctl,
-			   MSR_VMX_PIN_CTLS);
+			   MSR_VMX_TRUE_PIN_CTLS);
 }
 
 static inline void vmcs_write_proc_based_ctrls(struct vmm *vmm, u64 ctl)
 {
 	vmcs_write_control(vmm, CPU_BASED_VM_EXEC_CONTROL, ctl,
-			   MSR_VMX_PROC_CTLS);
+			   MSR_VMX_TRUE_PROC_CTLS);
 }
 
 static inline void vmcs_write_proc_based_ctrls2(struct vmm *vmm, u64 ctl)
@@ -222,6 +220,18 @@ static void vmcs_write_vm_exec_controls(struct vmm *vmm)
 	__vmwrite(CR0_READ_SHADOW, vmm->host_state.cr0);
 	__vmwrite(CR4_READ_SHADOW, vmm->host_state.cr4);
 	__vmwrite(EPT_POINTER, vmm->eptp.quad_word);
+}
+
+static void vmcs_write_vm_exit_controls(struct vmm *vmm)
+{
+	vmcs_write_control(vmm, VM_EXIT_CONTROLS, VM_EXIT_LONG_MODE,
+			   MSR_VMX_TRUE_EXIT_CTLS);
+}
+
+static void vmcs_write_vm_entry_controls(struct vmm *vmm)
+{
+	vmcs_write_control(vmm, VM_ENTRY_CONTROLS, VM_ENTRY_IA32E_GUEST,
+			   MSR_VMX_TRUE_ENTRY_CTLS);
 }
 
 int vmm_init(struct vmm *vmm)
@@ -267,6 +277,8 @@ int vmm_init(struct vmm *vmm)
 	}
 
 	vmcs_write_vm_exec_controls(vmm);
+	vmcs_write_vm_exit_controls(vmm);
+	vmcs_write_vm_entry_controls(vmm);
 
 	printf("Hello from VMX ROOT\n");
 
