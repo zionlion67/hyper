@@ -136,6 +136,7 @@ static void vmcs_get_host_selectors(struct segment_selectors *sel)
 	sel->ss = read_ss();
 	sel->fs = read_fs();
 	sel->gs = read_gs();
+	sel->tr = __str();
 }
 
 #define JUNK_ADDR 0xdeadbeef
@@ -167,12 +168,6 @@ static void vmcs_get_host_state(struct vmcs_host_state *state)
 
 	state->rsp = read_rsp();
 	state->rip = JUNK_ADDR;
-}
-
-int vmcs_setup_host_state(struct vmm *vmm)
-{
-	vmcs_get_host_state(&vmm->host_state);
-	return 0;
 }
 
 #define VMM_IDX(idx) 		((idx) - MSR_VMX_BASIC)
@@ -234,6 +229,38 @@ static void vmcs_write_vm_entry_controls(struct vmm *vmm)
 			   MSR_VMX_TRUE_ENTRY_CTLS);
 }
 
+static void vmcs_write_vm_host_state(struct vmm *vmm)
+{
+	__vmwrite(HOST_CR0, vmm->host_state.cr0);
+	__vmwrite(HOST_CR3, vmm->host_state.cr3);
+	__vmwrite(HOST_CR4, vmm->host_state.cr4);
+
+	__vmwrite(HOST_CS_SELECTOR, vmm->host_state.selectors.cs);
+	__vmwrite(HOST_DS_SELECTOR, vmm->host_state.selectors.ds);
+	__vmwrite(HOST_ES_SELECTOR, vmm->host_state.selectors.es);
+	__vmwrite(HOST_SS_SELECTOR, vmm->host_state.selectors.ss);
+	__vmwrite(HOST_FS_SELECTOR, vmm->host_state.selectors.fs);
+	__vmwrite(HOST_GS_SELECTOR, vmm->host_state.selectors.gs);
+	__vmwrite(HOST_TR_SELECTOR, vmm->host_state.selectors.tr);
+
+	__vmwrite(HOST_TR_BASE, vmm->host_state.tr_base);
+	__vmwrite(HOST_GDTR_BASE, vmm->host_state.gdtr_base);
+	__vmwrite(HOST_IDTR_BASE, vmm->host_state.idtr_base);
+	__vmwrite(HOST_FS_BASE, vmm->host_state.ia32_fs_base);
+	__vmwrite(HOST_GS_BASE, vmm->host_state.ia32_gs_base);
+
+	__vmwrite(HOST_SYSENTER_CS, vmm->host_state.ia32_sysenter_cs);
+	__vmwrite(HOST_SYSENTER_ESP, vmm->host_state.ia32_sysenter_esp);
+	__vmwrite(HOST_SYSENTER_EIP, vmm->host_state.ia32_sysenter_eip);
+
+	__vmwrite(HOST_PERF_GLOBAL_CTRL, vmm->host_state.ia32_perf_global_ctrl);
+	__vmwrite(HOST_PAT, vmm->host_state.ia32_pat);
+	__vmwrite(HOST_EFER, vmm->host_state.ia32_efer);
+
+	__vmwrite(HOST_RSP, vmm->host_state.rsp);
+	__vmwrite(HOST_RIP, vmm->host_state.rip);
+}
+
 int vmm_init(struct vmm *vmm)
 {
 	vmm_read_vmx_msrs(vmm);
@@ -246,21 +273,23 @@ int vmm_init(struct vmm *vmm)
 
 	u64 cr0 = read_cr0();
 	cr0 |= vmm->vmx_msr[VMM_MSR_VMX_CR0_FIXED0];
+	cr0 &= vmm->vmx_msr[VMM_MSR_VMX_CR0_FIXED1];
 	write_cr0(cr0);
 
 	u64 cr4 = read_cr4();
 	cr4 |= CR4_VMXE;
 	cr4 |= vmm->vmx_msr[VMM_MSR_VMX_CR4_FIXED0];
+	cr4 &= vmm->vmx_msr[VMM_MSR_VMX_CR4_FIXED1];
 	write_cr4(cr4);
 
-	vmcs_setup_host_state(vmm);
+	vmcs_get_host_state(&vmm->host_state);
 
 	if (setup_ept(vmm)) {
 		printf("Failed to setup EPT\n");
 		goto free_vmcs;
 	}
 
-	if (__vmx_on(virt_to_phys(vmm->vmx_on))) {
+	if (__vmxon(virt_to_phys(vmm->vmx_on))) {
 		printf("VMXON failed\n");
 		goto free_vmcs;
 	}
@@ -279,13 +308,14 @@ int vmm_init(struct vmm *vmm)
 	vmcs_write_vm_exec_controls(vmm);
 	vmcs_write_vm_exit_controls(vmm);
 	vmcs_write_vm_entry_controls(vmm);
+	vmcs_write_vm_host_state(vmm);
 
 	printf("Hello from VMX ROOT\n");
 
 	return 0;
 
 free_vmcs:
-	__vmx_off();
+	__vmxoff();
 	release_vmcs(vmm->vmcs);
 	return 1;
 }

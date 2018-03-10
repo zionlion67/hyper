@@ -13,6 +13,7 @@ struct segment_selectors {
 	u16	ss;
 	u16	fs;
 	u16	gs;
+	u16	tr;
 };
 
 /* Loaded during VM-exits */
@@ -77,7 +78,7 @@ int vmm_init(struct vmm *);
 	__ret;					\
 })
 
-#define __vmx_on(paddr) 	__vmx_insn_paddr(vmxon, paddr)
+#define __vmxon(paddr)  	__vmx_insn_paddr(vmxon, paddr)
 #define __vmclear(paddr)	__vmx_insn_paddr(vmclear, paddr)
 #define __vmptrld(paddr)	__vmx_insn_paddr(vmptrld, paddr)
 
@@ -255,7 +256,7 @@ enum vmcs_field {
     HOST_RIP                        = 0x00006c16,
 };
 
-static inline void __vmx_off(void)
+static inline void __vmxoff(void)
 {
 	asm volatile ("vmxoff");
 }

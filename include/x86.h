@@ -130,5 +130,12 @@ static inline void __sgdt(struct gdtr *gdtr)
 	asm volatile ("sgdt %0" : : "m"(*gdtr));
 }
 
+static inline u16 __str(void)
+{
+	u16 ret;
+	asm volatile ("strw %w0" : "=r"(ret));
+	return ret;
+}
+
 #endif /* !__ASM__ */
 #endif /* !_X86_H_ */
