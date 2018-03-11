@@ -139,13 +139,33 @@ static void vmcs_get_host_selectors(struct segment_selectors *sel)
 	sel->tr = __str();
 }
 
+static void vmcs_get_control_regs(struct control_regs *regs)
+{
+	regs->cr0 = read_cr0();
+	regs->cr3 = read_cr3();
+	regs->cr4 = read_cr4();
+}
+
+static void vmcs_fill_msr_state(struct vmcs_state_msr *msr)
+{
+	msr->ia32_fs_base = __readmsr(MSR_FS_BASE);
+	msr->ia32_gs_base = __readmsr(MSR_GS_BASE);
+	msr->ia32_sysenter_cs = __readmsr(MSR_SYSENTER_CS);
+	msr->ia32_sysenter_esp = __readmsr(MSR_SYSENTER_ESP);
+	msr->ia32_sysenter_eip = __readmsr(MSR_SYSENTER_EIP);
+	msr->ia32_perf_global_ctrl = __readmsr(MSR_PERF_GLOBAL_CTRL);
+	msr->ia32_pat = __readmsr(MSR_PAT);
+	msr->ia32_efer = __readmsr(MSR_EFER);
+	msr->ia32_debugctl = __readmsr(MSR_DEBUGCTL);
+#if 0
+	msr->ia32_bndcfgs = __readmsr(MSR_BNDCFGS);
+#endif
+}
+
 #define JUNK_ADDR 0xdeadbeef
 static void vmcs_get_host_state(struct vmcs_host_state *state)
 {
-	state->cr0 = read_cr0();
-	state->cr3 = read_cr3();
-	state->cr4 = read_cr4();
-
+	vmcs_get_control_regs(&state->control_regs);
 	vmcs_get_host_selectors(&state->selectors);
 
 	struct gdtr gdtr;
@@ -154,17 +174,9 @@ static void vmcs_get_host_state(struct vmcs_host_state *state)
 
 	__sidt(&gdtr); /* gdtr has the same memory layout */
 	state->idtr_base = gdtr.base;
-
 	state->tr_base = (u64)tss;
 
-	state->ia32_fs_base = __readmsr(MSR_FS_BASE);
-	state->ia32_gs_base = __readmsr(MSR_GS_BASE);
-	state->ia32_sysenter_cs = __readmsr(MSR_SYSENTER_CS);
-	state->ia32_sysenter_esp = __readmsr(MSR_SYSENTER_ESP);
-	state->ia32_sysenter_eip = __readmsr(MSR_SYSENTER_EIP);
-	state->ia32_perf_global_ctrl = __readmsr(MSR_PERF_GLOBAL_CTRL);
-	state->ia32_pat = __readmsr(MSR_PAT);
-	state->ia32_efer = __readmsr(MSR_EFER);
+	vmcs_fill_msr_state(&state->msr);
 
 	state->rsp = read_rsp();
 	state->rip = JUNK_ADDR;
@@ -212,8 +224,8 @@ static void vmcs_write_vm_exec_controls(struct vmm *vmm)
 			VM_EXEC_ENABLE_EPT|VM_EXEC_UNRESTRICTED_GUEST);
 
 	__vmwrite(EXCEPTION_BITMAP, 0);
-	__vmwrite(CR0_READ_SHADOW, vmm->host_state.cr0);
-	__vmwrite(CR4_READ_SHADOW, vmm->host_state.cr4);
+	__vmwrite(CR0_READ_SHADOW, vmm->host_state.control_regs.cr0);
+	__vmwrite(CR4_READ_SHADOW, vmm->host_state.control_regs.cr4);
 	__vmwrite(EPT_POINTER, vmm->eptp.quad_word);
 }
 
@@ -229,11 +241,22 @@ static void vmcs_write_vm_entry_controls(struct vmm *vmm)
 			   MSR_VMX_TRUE_ENTRY_CTLS);
 }
 
+static void vmcs_write_control_regs(struct control_regs *regs, int host)
+{
+	enum vmcs_field base_field;
+	if (host)
+		base_field = HOST_CR0;
+	else
+		base_field = GUEST_CR0;
+
+	__vmwrite(base_field, regs->cr0);
+	__vmwrite(base_field + 2, regs->cr3);
+	__vmwrite(base_field + 4, regs->cr4);
+}
+
 static void vmcs_write_vm_host_state(struct vmm *vmm)
 {
-	__vmwrite(HOST_CR0, vmm->host_state.cr0);
-	__vmwrite(HOST_CR3, vmm->host_state.cr3);
-	__vmwrite(HOST_CR4, vmm->host_state.cr4);
+	vmcs_write_control_regs(&vmm->host_state.control_regs, 1);
 
 	__vmwrite(HOST_CS_SELECTOR, vmm->host_state.selectors.cs);
 	__vmwrite(HOST_DS_SELECTOR, vmm->host_state.selectors.ds);
@@ -246,19 +269,93 @@ static void vmcs_write_vm_host_state(struct vmm *vmm)
 	__vmwrite(HOST_TR_BASE, vmm->host_state.tr_base);
 	__vmwrite(HOST_GDTR_BASE, vmm->host_state.gdtr_base);
 	__vmwrite(HOST_IDTR_BASE, vmm->host_state.idtr_base);
-	__vmwrite(HOST_FS_BASE, vmm->host_state.ia32_fs_base);
-	__vmwrite(HOST_GS_BASE, vmm->host_state.ia32_gs_base);
+	__vmwrite(HOST_FS_BASE, vmm->host_state.msr.ia32_fs_base);
+	__vmwrite(HOST_GS_BASE, vmm->host_state.msr.ia32_gs_base);
 
-	__vmwrite(HOST_SYSENTER_CS, vmm->host_state.ia32_sysenter_cs);
-	__vmwrite(HOST_SYSENTER_ESP, vmm->host_state.ia32_sysenter_esp);
-	__vmwrite(HOST_SYSENTER_EIP, vmm->host_state.ia32_sysenter_eip);
+	__vmwrite(HOST_SYSENTER_CS, vmm->host_state.msr.ia32_sysenter_cs);
+	__vmwrite(HOST_SYSENTER_ESP, vmm->host_state.msr.ia32_sysenter_esp);
+	__vmwrite(HOST_SYSENTER_EIP, vmm->host_state.msr.ia32_sysenter_eip);
 
-	__vmwrite(HOST_PERF_GLOBAL_CTRL, vmm->host_state.ia32_perf_global_ctrl);
-	__vmwrite(HOST_PAT, vmm->host_state.ia32_pat);
-	__vmwrite(HOST_EFER, vmm->host_state.ia32_efer);
+	__vmwrite(HOST_PERF_GLOBAL_CTRL, vmm->host_state.msr.ia32_perf_global_ctrl);
+	__vmwrite(HOST_PAT, vmm->host_state.msr.ia32_pat);
+	__vmwrite(HOST_EFER, vmm->host_state.msr.ia32_efer);
 
 	__vmwrite(HOST_RSP, vmm->host_state.rsp);
 	__vmwrite(HOST_RIP, vmm->host_state.rip);
+}
+
+static inline enum vmcs_field sel_offset(enum vmcs_field field)
+{
+	return field - GUEST_ES_SELECTOR;
+}
+
+static inline enum vmcs_field sel_limit(enum vmcs_field field)
+{
+	return sel_offset(GUEST_ES_LIMIT) + field;
+}
+
+static inline enum vmcs_field sel_access(enum vmcs_field field)
+{
+	return sel_offset(GUEST_ES_AR_BYTES) + field;
+}
+
+static inline enum vmcs_field sel_base(enum vmcs_field field)
+{
+	return sel_offset(GUEST_ES_BASE) + field;
+}
+
+static void vmcs_write_guest_selector(struct segment_descriptor *desc)
+{
+	enum vmcs_field field = desc->base_field;
+	__vmwrite(field, desc->selector);
+	__vmwrite(sel_limit(field), desc->limit);
+	__vmwrite(sel_access(field), desc->access);
+	__vmwrite(sel_base(field), desc->base);
+}
+
+static void vmcs_write_guest_selectors(struct segment_descriptors *desc)
+{
+	vmcs_write_guest_selector(&desc->cs);
+	vmcs_write_guest_selector(&desc->ds);
+	vmcs_write_guest_selector(&desc->es);
+	vmcs_write_guest_selector(&desc->ss);
+	vmcs_write_guest_selector(&desc->fs);
+	vmcs_write_guest_selector(&desc->gs);
+	vmcs_write_guest_selector(&desc->tr);
+	vmcs_write_guest_selector(&desc->ldtr);
+}
+
+static void vmcs_write_guest_reg_state(struct vmcs_guest_register_state *state)
+{
+	vmcs_write_control_regs(&state->control_regs, 0);
+	vmcs_write_guest_selectors(&state->seg_descs);
+
+	__vmwrite(GUEST_GDTR_BASE, state->gdtr.base);
+	__vmwrite(GUEST_IDTR_BASE, state->idtr.base);
+	__vmwrite(GUEST_GDTR_LIMIT, state->gdtr.limit);
+	__vmwrite(GUEST_IDTR_LIMIT, state->idtr.limit);
+
+	__vmwrite(GUEST_SYSENTER_CS, state->msr.ia32_sysenter_cs);
+	__vmwrite(GUEST_SYSENTER_ESP, state->msr.ia32_sysenter_esp);
+	__vmwrite(GUEST_SYSENTER_EIP, state->msr.ia32_sysenter_eip);
+
+	__vmwrite(GUEST_PAT, state->msr.ia32_pat);
+	__vmwrite(GUEST_EFER, state->msr.ia32_efer);
+	__vmwrite(GUEST_BNDCFGS, state->msr.ia32_bndcfgs);
+	__vmwrite(GUEST_DEBUGCTL, state->msr.ia32_debugctl);
+	__vmwrite(GUEST_PERF_GLOBAL_CTRL, state->msr.ia32_perf_global_ctrl);
+}
+
+static void vmcs_write_guest_state(struct vmcs_guest_state *state)
+{
+	vmcs_write_guest_reg_state(&state->reg_state);
+
+	__vmwrite(VMCS_LINK_POINTER, (u64)-1ULL);
+}
+
+static inline void vmcs_write_vm_guest_state(struct vmm *vmm)
+{
+	vmcs_write_guest_state(&vmm->guest_state);
 }
 
 int vmm_init(struct vmm *vmm)
@@ -309,6 +406,7 @@ int vmm_init(struct vmm *vmm)
 	vmcs_write_vm_exit_controls(vmm);
 	vmcs_write_vm_entry_controls(vmm);
 	vmcs_write_vm_host_state(vmm);
+	vmcs_write_vm_guest_state(vmm);
 
 	printf("Hello from VMX ROOT\n");
 

@@ -6,54 +6,6 @@
 
 #define NR_VMX_MSR 17
 
-struct segment_selectors {
-	u16	cs;
-	u16	ds;
-	u16	es;
-	u16	ss;
-	u16	fs;
-	u16	gs;
-	u16	tr;
-};
-
-/* Loaded during VM-exits */
-struct vmcs_host_state {
-	u64	cr0;
-	u64	cr3;
-	u64	cr4;
-
-	struct segment_selectors selectors;
-
-	u64	tr_base;
-	u64	gdtr_base;
-	u64	idtr_base;
-
-	u32	ia32_sysenter_cs;
-	u64	ia32_fs_base;
-	u64	ia32_gs_base;
-	u64	ia32_sysenter_esp;
-	u64	ia32_sysenter_eip;
-	u64	ia32_perf_global_ctrl;
-	u64	ia32_pat;
-	u64	ia32_efer;
-
-	u64	rsp;
-	u64	rip;
-};
-
-struct vmcs;
-struct vmm {
-	u64 vmx_msr[NR_VMX_MSR];
-
-	struct vmcs *vmx_on;
-	struct vmcs *vmcs;
-
-	struct eptp eptp;
-	struct vmcs_host_state host_state;
-};
-
-int has_vmx_support(void);
-int vmm_init(struct vmm *);
 
 /*
  * Assembly magic to execute VMX instructions that
@@ -156,7 +108,7 @@ enum vmcs_field {
     TSC_MULTIPLIER                  = 0x00002032,
     GUEST_PHYSICAL_ADDRESS          = 0x00002400,
     VMCS_LINK_POINTER               = 0x00002800,
-    GUEST_IA32_DEBUGCTL             = 0x00002802,
+    GUEST_DEBUGCTL                  = 0x00002802,
     GUEST_PAT                       = 0x00002804,
     GUEST_EFER                      = 0x00002806,
     GUEST_PERF_GLOBAL_CTRL          = 0x00002808,
@@ -255,6 +207,133 @@ enum vmcs_field {
     HOST_RSP                        = 0x00006c14,
     HOST_RIP                        = 0x00006c16,
 };
+
+struct segment_selectors {
+	u16	cs;
+	u16	ds;
+	u16	es;
+	u16	ss;
+	u16	fs;
+	u16	gs;
+	u16	tr;
+};
+
+struct control_regs {
+	u64	cr0;
+	u64	cr3;
+	u64	cr4;
+};
+
+struct vmcs_state_msr {
+	u32	ia32_sysenter_cs;
+	u64	ia32_fs_base;
+	u64	ia32_gs_base;
+	u64	ia32_sysenter_esp;
+	u64	ia32_sysenter_eip;
+	u64	ia32_perf_global_ctrl;
+	u64	ia32_pat;
+	u64	ia32_efer;
+	u64	ia32_debugctl;
+	u64	ia32_bndcfgs;
+};
+
+/* Loaded during VM-exits */
+struct vmcs_host_state {
+	struct control_regs control_regs;
+	struct segment_selectors selectors;
+
+	u64	tr_base;
+	u64	gdtr_base;
+	u64	idtr_base;
+
+	struct vmcs_state_msr msr;
+
+	u64	rsp;
+	u64	rip;
+};
+
+struct segment_descriptor {
+	u16	selector;
+	u64	base;
+	u32	limit;
+	union {
+		struct {
+			u32	type : 4;
+			u32	s : 1;
+			u32	dpl : 2;
+			u32	p : 1;
+			u32	reserved1 : 4;
+			u32	avl : 1;
+			u32	l : 1;
+			u32	db : 1;
+			u32	g : 1;
+			u32	usable : 1;
+			u32	reserved2 : 15;
+		};
+		u32	access;
+	};
+	/* GUEST_*_SELECTOR */
+	enum vmcs_field	base_field;
+};
+
+struct segment_descriptors {
+	struct segment_descriptor cs;
+	struct segment_descriptor ds;
+	struct segment_descriptor es;
+	struct segment_descriptor ss;
+	struct segment_descriptor fs;
+	struct segment_descriptor gs;
+	struct segment_descriptor tr;
+	struct segment_descriptor ldtr;
+};
+
+struct table_register {
+	u32	limit;
+	u64	base;
+};
+
+struct vmcs_guest_register_state {
+	struct control_regs control_regs;
+
+	struct segment_descriptors seg_descs;
+
+	struct table_register gdtr;
+	struct table_register idtr;
+
+	struct vmcs_state_msr msr;
+
+	u64	dr7;
+	u64	rflags;
+	u64	rsp;
+	u64	rip;
+};
+
+struct vmcs_guest_state {
+	struct vmcs_guest_register_state reg_state;
+
+	u32	intr_state; /* interuptability */
+	u32	activity_state;
+	u32	preempt_timer;
+	u16	intr_status;
+	u16	pml_index;
+	u64	vmcs_link;
+	u64	pdpte[4];
+};
+
+struct vmcs;
+struct vmm {
+	u64 vmx_msr[NR_VMX_MSR];
+
+	struct vmcs *vmx_on;
+	struct vmcs *vmcs;
+
+	struct eptp eptp;
+	struct vmcs_host_state host_state;
+	struct vmcs_guest_state guest_state;
+};
+
+int has_vmx_support(void);
+int vmm_init(struct vmm *);
 
 static inline void __vmxoff(void)
 {

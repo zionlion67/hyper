@@ -25,8 +25,10 @@
 #define MSR_SYSENTER_ESP	0x175
 #define MSR_SYSENTER_EIP	0x176
 
+#define MSR_DEBUGCTL		0x1d9
 #define MSR_PAT			0x277
 #define MSR_PERF_GLOBAL_CTRL	0x38f
+#define MSR_BNDCFGS		0xd90
 #define MSR_FS_BASE		0xc0000100
 #define MSR_GS_BASE		0xc0000101
 
