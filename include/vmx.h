@@ -6,34 +6,6 @@
 
 #define NR_VMX_MSR 17
 
-
-/*
- * Assembly magic to execute VMX instructions that
- * only take a physical address as operand.
- */
-#define __vmx_insn_paddr(insn, paddr)		\
-({						\
-	u64 __ret;				\
-	/* needed to pass expressions in paddr */ \
-	u64 __paddr = (paddr);			\
-	asm volatile (#insn" %[addr]\n\t"	\
-		      "jbe 1f\n\t"		\
-		      "mov $0, %[ret]\n\t"	\
-		      "jmp 2f\n\t"		\
-		      "1:\n\t"			\
-		      "mov $1, %[ret]\n\t"	\
-		      "2:"			\
-		     : [ret] "=r"(__ret)	\
-		     : [addr] "m"(__paddr)	\
-		     : "cc"			\
-		    );				\
-	__ret;					\
-})
-
-#define __vmxon(paddr)  	__vmx_insn_paddr(vmxon, paddr)
-#define __vmclear(paddr)	__vmx_insn_paddr(vmclear, paddr)
-#define __vmptrld(paddr)	__vmx_insn_paddr(vmptrld, paddr)
-
 /* VM Execution control fields */
 #define VM_EXEC_USE_MSR_BITMAPS			(1 << 28)
 #define VM_EXEC_ENABLE_PROC_CTLS2		(1 << 31)
@@ -334,6 +306,42 @@ struct vmm {
 
 int has_vmx_support(void);
 int vmm_init(struct vmm *);
+
+/*
+ * Assembly magic to execute VMX instructions that
+ * only take a physical address as operand.
+ */
+#define __vmx_insn_paddr(insn, paddr)		\
+({						\
+	int __ret;				\
+	asm volatile (#insn" %[addr]\n\t"	\
+		      "jbe 1f\n\t"		\
+		      "mov $0, %[ret]\n\t"	\
+		      "jmp 2f\n\t"		\
+		      "1:\n\t"			\
+		      "mov $1, %[ret]\n\t"	\
+		      "2:"			\
+		     : [ret] "=r"(__ret)	\
+		     : [addr] "m"(paddr)	\
+		     : "cc"			\
+		    );				\
+	__ret;					\
+})
+
+static inline int __vmxon(paddr_t paddr)
+{
+	return __vmx_insn_paddr(vmxon, paddr);
+}
+
+static inline int __vmclear(paddr_t paddr)
+{
+	return __vmx_insn_paddr(vmclear, paddr);
+}
+
+static inline int __vmptrld(paddr_t paddr)
+{
+	return __vmx_insn_paddr(vmptrld, paddr);
+}
 
 static inline void __vmxoff(void)
 {
