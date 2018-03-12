@@ -4,6 +4,7 @@
 #include "x86.h"
 #include "ept.h"
 #include "vmx_guest.h"
+#include <stdio.h>
 
 #define NR_VMX_MSR 17
 
@@ -240,7 +241,7 @@ struct segment_descriptor {
 			u32	l : 1;
 			u32	db : 1;
 			u32	g : 1;
-			u32	usable : 1;
+			u32	unusable : 1;
 			u32	reserved2 : 15;
 		};
 		u32	access;
@@ -352,11 +353,16 @@ static inline void __vmxoff(void)
 	asm volatile ("vmxoff");
 }
 
-static inline u64 __vmread(enum vmcs_field field)
+static inline u8 __vmread(enum vmcs_field field, u64 *val)
 {
-	u64 ret;
-	asm volatile ("vmread %0" : "=a"(ret) : "r"(field));
-	return ret;
+	u8 err = 0;
+	asm volatile ("vmread %[field], %[val]\n\t"
+		      "setna %[error]\n\t"
+		      : [error] "=r"(err)
+		      : [field] "r"((u64)field), [val] "m"(*val)
+		      : "memory"
+		     );
+	return err;
 }
 
 static inline void __vmwrite(enum vmcs_field field, u64 value)

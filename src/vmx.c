@@ -2,6 +2,7 @@
 
 #include <compiler.h>
 #include <gdt.h>
+#include <kmalloc.h>
 #include <page.h>
 #include <memory.h>
 #include <string.h>
@@ -164,8 +165,9 @@ static void vmcs_fill_msr_state(struct vmcs_state_msr *msr)
 #endif
 }
 
-#define JUNK_ADDR 0xdeadbeef
-static void vmcs_get_host_state(struct vmcs_host_state *state)
+#define VM_EXIT_STACK_SIZE	(PAGE_SIZE - 16)
+extern void vm_exit_stub(void);
+static int vmcs_get_host_state(struct vmcs_host_state *state)
 {
 	vmcs_get_control_regs(&state->control_regs);
 	vmcs_get_host_selectors(&state->selectors);
@@ -180,8 +182,17 @@ static void vmcs_get_host_state(struct vmcs_host_state *state)
 
 	vmcs_fill_msr_state(&state->msr);
 
-	state->rsp = read_rsp();
-	state->rip = JUNK_ADDR;
+	void *ptr = kmalloc(PAGE_SIZE);
+	if (ptr == NULL)
+		return 1;
+	state->rsp = (u64)ptr + VM_EXIT_STACK_SIZE;
+	state->rip = (u64)vm_exit_stub;
+	return 0;
+}
+
+static inline void host_set_stack_ctx(struct vmm *vmm)
+{
+	*((void **)vmm->host_state.rsp) = (void *)vmm;
 }
 
 #define VMM_IDX(idx) 		((idx) - MSR_VMX_BASIC)
@@ -239,7 +250,7 @@ static void vmcs_write_vm_exit_controls(struct vmm *vmm)
 
 static void vmcs_write_vm_entry_controls(struct vmm *vmm)
 {
-	vmcs_write_control(vmm, VM_ENTRY_CONTROLS, VM_ENTRY_IA32E_GUEST,
+	vmcs_write_control(vmm, VM_ENTRY_CONTROLS, 0,
 			   MSR_VMX_TRUE_ENTRY_CTLS);
 }
 
@@ -346,13 +357,18 @@ static void vmcs_write_guest_reg_state(struct vmcs_guest_register_state *state)
 	__vmwrite(GUEST_BNDCFGS, state->msr.ia32_bndcfgs);
 	__vmwrite(GUEST_DEBUGCTL, state->msr.ia32_debugctl);
 	__vmwrite(GUEST_PERF_GLOBAL_CTRL, state->msr.ia32_perf_global_ctrl);
+	__vmwrite(GUEST_DR7, state->dr7);
+
+	__vmwrite(GUEST_RFLAGS, state->rflags);
+	__vmwrite(GUEST_RSP, state->rsp);
+	__vmwrite(GUEST_RIP, state->rip);
 }
 
 static void vmcs_write_guest_state(struct vmcs_guest_state *state)
 {
 	vmcs_write_guest_reg_state(&state->reg_state);
 
-	__vmwrite(VMCS_LINK_POINTER, (u64)-1ULL);
+	__vmwrite(VMCS_LINK_POINTER, state->vmcs_link);
 }
 
 static inline void vmcs_write_vm_guest_state(struct vmm *vmm)
@@ -381,7 +397,12 @@ int vmm_init(struct vmm *vmm)
 	cr4 &= vmm->vmx_msr[VMM_MSR_VMX_CR4_FIXED1];
 	write_cr4(cr4);
 
-	vmcs_get_host_state(&vmm->host_state);
+	if (vmcs_get_host_state(&vmm->host_state)) {
+		printf("Failed to setup host state\n");
+		goto free_vmcs;
+	}
+
+	host_set_stack_ctx(vmm);
 
 	if (setup_ept(vmm)) {
 		printf("Failed to setup EPT\n");
@@ -424,5 +445,6 @@ int vmm_init(struct vmm *vmm)
 free_vmcs:
 	__vmxoff();
 	release_vmcs(vmm->vmcs);
+	kfree((void *)(vmm->host_state.rsp - VM_EXIT_STACK_SIZE));
 	return 1;
 }

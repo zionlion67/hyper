@@ -15,21 +15,21 @@ static void gate_to_seg_desc(struct gdt_desc *gdt_desc,
 
 	seg_desc->access = 0;
 	seg_desc->type = gdt_desc->type;
-	seg_desc->s = gdt_desc->s;
+	seg_desc->s = 1;
 	seg_desc->dpl = gdt_desc->dpl;
 	seg_desc->p = gdt_desc->p;
 	seg_desc->avl = gdt_desc->avl;
 	seg_desc->l = 0;
-	seg_desc->db = gdt_desc->db;
+	seg_desc->db = 1;//gdt_desc->db;
 	seg_desc->g = gdt_desc->g;
-	seg_desc->usable = 1;
+	seg_desc->unusable = 0;
 
 	seg_desc->base_field = base_field;
 
 }
 
 #define SIZEOF_TEST_CODE 117
-static const char *test_code = 
+static const char *test_code =
 "\x56\xba\xf8\x03\x00\x00\x53\xb8\x68\x00\x00"
 "\x00\xee\xbb\x65\x00\x00\x00\x89\xd8\xee\xb8"
 "\x6c\x00\x00\x00\xee\xee\xbe\x6f\x00\x00\x00"
@@ -46,11 +46,14 @@ static const char *test_code =
 void setup_test_guest(struct vmm *vmm)
 {
 	struct vmcs_guest_register_state *reg_state = &vmm->guest_state.reg_state;
-	reg_state->control_regs.cr0 = CR0_PE;
+	reg_state->control_regs.cr0 = vmm->host_state.control_regs.cr0 & ~CR0_PG;
+	//reg_state->control_regs.cr4 = vmm->host_state.control_regs.cr4 & ~CR4_PAE;
 
 	struct gdt_desc *gdt = get_gdt_ptr();
 	struct gdt_desc *cs_desc = gdt + (VMM_HOST_SEL(vmm, cs) >> 3);
 	struct gdt_desc *ds_desc = gdt + (VMM_HOST_SEL(vmm, ds) >> 3);
+
+	cs_desc->type = 0xf;
 
 	gate_to_seg_desc(cs_desc, &reg_state->seg_descs.cs,
 			 VMM_HOST_SEL(vmm, cs), GUEST_CS_SELECTOR);
@@ -62,15 +65,24 @@ void setup_test_guest(struct vmm *vmm)
 			 VMM_HOST_SEL(vmm, es), GUEST_ES_SELECTOR);
 
 	reg_state->seg_descs.fs.base_field = GUEST_FS_SELECTOR;
+	reg_state->seg_descs.fs.unusable = 1;
 	reg_state->seg_descs.gs.base_field = GUEST_GS_SELECTOR;
+	reg_state->seg_descs.gs.unusable = 1;
 	reg_state->seg_descs.tr.base_field = GUEST_TR_SELECTOR;
+	reg_state->seg_descs.tr.type = 0xb /* 32-bit busy TSS */;
+	reg_state->seg_descs.tr.s = 0;
+	reg_state->seg_descs.tr.p = 1;
+	reg_state->seg_descs.tr.g = 0;
 	reg_state->seg_descs.ldtr.base_field = GUEST_LDTR_SELECTOR;
+	reg_state->seg_descs.ldtr.unusable = 1;
 
 
 	reg_state->gdtr.base = 0;
 	reg_state->idtr.base = 0;
 	reg_state->gdtr.limit = 0;
 	reg_state->idtr.limit = 0;
+
+	vmm->guest_state.vmcs_link = (u64)-1ULL;
 
 	memcpy(vmm->guest_mem_start, test_code, SIZEOF_TEST_CODE);
 
