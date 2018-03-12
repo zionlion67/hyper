@@ -13,14 +13,16 @@ OBJS = src/boot.o 	\
        src/memory.o	\
        src/kmalloc.o	\
        src/tss.o	\
-       src/vmx.o	
+       src/vmx.o	\
+       src/vmx_guest_test.o
 
 LIBC_DIR=src/libc
 LIBC_OBJS=$(LIBC_DIR)/printf.o \
 	  $(LIBC_DIR)/strlen.o \
 	  $(LIBC_DIR)/strnlen.o \
 	  $(LIBC_DIR)/puts.o	\
-	  $(LIBC_DIR)/memset.o
+	  $(LIBC_DIR)/memset.o  \
+	  $(LIBC_DIR)/memcpy.o
 
 CC=gcc
 CPPFLAGS += -I$(INCLUDE_DIR) -I$(LIBC_DIR)/include

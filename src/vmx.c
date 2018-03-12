@@ -125,6 +125,8 @@ static int setup_ept(struct vmm *vmm)
 	paddr_t start = virt_to_phys(p);
 	paddr_t end = start + nb_pages * ALLOC_PAGE_SIZE;
 	setup_ept_range(vmm, start, end, 0);
+	vmm->guest_mem_start = p;
+	vmm->guest_mem_end = phys_to_virt(end);
 	return 0;
 }
 
@@ -386,6 +388,8 @@ int vmm_init(struct vmm *vmm)
 		goto free_vmcs;
 	}
 
+	setup_test_guest(vmm);
+
 	if (__vmxon(virt_to_phys(vmm->vmx_on))) {
 		printf("VMXON failed\n");
 		goto free_vmcs;
@@ -409,6 +413,11 @@ int vmm_init(struct vmm *vmm)
 	vmcs_write_vm_guest_state(vmm);
 
 	printf("Hello from VMX ROOT\n");
+
+	if (__vmlaunch()) {
+		printf("VMLAUNCH failed\n");
+		goto free_vmcs;
+	}
 
 	return 0;
 

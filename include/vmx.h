@@ -3,6 +3,7 @@
 
 #include "x86.h"
 #include "ept.h"
+#include "vmx_guest.h"
 
 #define NR_VMX_MSR 17
 
@@ -299,6 +300,9 @@ struct vmm {
 	struct vmcs *vmx_on;
 	struct vmcs *vmcs;
 
+	vaddr_t guest_mem_start;
+	vaddr_t guest_mem_end;
+
 	struct eptp eptp;
 	struct vmcs_host_state host_state;
 	struct vmcs_guest_state guest_state;
@@ -350,7 +354,7 @@ static inline void __vmxoff(void)
 
 static inline u64 __vmread(enum vmcs_field field)
 {
-	unsigned long ret;
+	u64 ret;
 	asm volatile ("vmread %0" : "=a"(ret) : "r"(field));
 	return ret;
 }
@@ -366,7 +370,20 @@ static inline void __vmwrite(enum vmcs_field field, u64 value)
 			  );
 	return;
 fail:
-	printf("VMWRITE failed ...\n");
+	printf("VMWRITE failed: field=0x%x\tval=0x%lx\n", field, value);
+}
+
+static inline int __vmlaunch(void)
+{
+	asm volatile goto("vmlaunch\n\t"
+			  "jbe %l0"
+			  :
+			  :
+			  :
+			  : fail);
+	return 0;
+fail:
+	return 1;
 }
 
 static inline u64 adjust_vm_control(u64 value, u64 ctrl_msr)

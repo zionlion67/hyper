@@ -2,27 +2,6 @@
 #include <page.h>
 #include <x86.h>
 
-struct gdt_desc {
-	union {
-		struct {
-			u16	limit_lo;
-			u16	base_lo;
-			u8	base_mi;
-			u8	type : 4;
-			u8	s : 1;
-			u8	dpl : 2;
-			u8	p : 1;
-			u8	limit_hi : 4;
-			u8	avl : 1;
-			u8	l : 1;
-			u8	db : 1;
-			u8	g : 1;
-			u8	base_hi;
-		};
-		u64	quad;
-	};
-} __packed;
-
 struct tss {
 	u32	reserved0;
 	u64	rsp0;
@@ -48,14 +27,6 @@ struct tss_descriptor {
 
 /* Used in VMCS host state setup */
 struct tss tss;
-
-static inline struct gdt_desc *get_gdt_ptr(void)
-{
-	struct gdtr gdtr;
-	__sgdt(&gdtr);
-
-	return (struct gdt_desc *)gdtr.base;
-}
 
 /* TODO add descriptor manipulation functions ... */
 #define GDT_TSS_DESC_TYPE 0x9 /* defined by Intel */

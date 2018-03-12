@@ -132,6 +132,14 @@ static inline void __sgdt(struct gdtr *gdtr)
 	asm volatile ("sgdt %0" : : "m"(*gdtr));
 }
 
+static inline struct gate_desc *get_gdt_ptr(void)
+{
+	struct gdtr gdtr;
+	__sgdt(&gdtr);
+
+	return (struct gate_desc *)gdtr.base;
+}
+
 static inline u16 __str(void)
 {
 	u16 ret;
