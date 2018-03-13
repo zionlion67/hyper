@@ -11,7 +11,7 @@ static void gate_to_seg_desc(struct gdt_desc *gdt_desc,
 	seg_desc->base = ((u64)gdt_desc->base_lo|((u64)gdt_desc->base_mi << 16)
 			 |((u64)gdt_desc->base_hi << 24));
 
-	seg_desc->limit = ((u32)gdt_desc->limit_lo|(u32)gdt_desc->limit_hi << 16);
+	seg_desc->limit = (u32)~0;
 
 	seg_desc->access = 0;
 	seg_desc->type = gdt_desc->type;
@@ -53,40 +53,42 @@ void setup_test_guest(struct vmm *vmm)
 	struct gdt_desc *cs_desc = gdt + (VMM_HOST_SEL(vmm, cs) >> 3);
 	struct gdt_desc *ds_desc = gdt + (VMM_HOST_SEL(vmm, ds) >> 3);
 
-	cs_desc->type = 0xf;
 
 	gate_to_seg_desc(cs_desc, &reg_state->seg_descs.cs,
 			 VMM_HOST_SEL(vmm, cs), GUEST_CS_SELECTOR);
+	reg_state->seg_descs.cs.type = 0xb;
 	gate_to_seg_desc(ds_desc, &reg_state->seg_descs.ds,
 			 VMM_HOST_SEL(vmm, ds), GUEST_DS_SELECTOR);
 	gate_to_seg_desc(ds_desc, &reg_state->seg_descs.ss,
 			 VMM_HOST_SEL(vmm, ss), GUEST_SS_SELECTOR);
 	gate_to_seg_desc(ds_desc, &reg_state->seg_descs.es,
 			 VMM_HOST_SEL(vmm, es), GUEST_ES_SELECTOR);
+	gate_to_seg_desc(ds_desc, &reg_state->seg_descs.fs,
+			 VMM_HOST_SEL(vmm, fs), GUEST_FS_SELECTOR);
+	gate_to_seg_desc(ds_desc, &reg_state->seg_descs.gs,
+			 VMM_HOST_SEL(vmm, gs), GUEST_GS_SELECTOR);
 
-	reg_state->seg_descs.fs.base_field = GUEST_FS_SELECTOR;
-	reg_state->seg_descs.fs.unusable = 1;
-	reg_state->seg_descs.gs.base_field = GUEST_GS_SELECTOR;
-	reg_state->seg_descs.gs.unusable = 1;
 	reg_state->seg_descs.tr.base_field = GUEST_TR_SELECTOR;
+	reg_state->seg_descs.tr.selector = 0x18;
 	reg_state->seg_descs.tr.type = 0xb /* 32-bit busy TSS */;
 	reg_state->seg_descs.tr.s = 0;
 	reg_state->seg_descs.tr.p = 1;
 	reg_state->seg_descs.tr.g = 0;
+	reg_state->seg_descs.tr.limit = 0xffff;
 	reg_state->seg_descs.ldtr.base_field = GUEST_LDTR_SELECTOR;
 	reg_state->seg_descs.ldtr.unusable = 1;
 
 
 	reg_state->gdtr.base = 0;
 	reg_state->idtr.base = 0;
-	reg_state->gdtr.limit = 0;
-	reg_state->idtr.limit = 0;
+	reg_state->gdtr.limit = 0xffff;
+	reg_state->idtr.limit = 0xffff;
 
 	vmm->guest_state.vmcs_link = (u64)-1ULL;
 
-	memcpy(vmm->guest_mem_start, test_code, SIZEOF_TEST_CODE);
+	memcpy(vmm->guest_mem_start + (1 << 20), test_code, SIZEOF_TEST_CODE);
 
 	reg_state->rflags = 0x2;
 	reg_state->rsp = 0x400000;
-	reg_state->rip = virt_to_phys(vmm->guest_mem_start);
+	reg_state->rip = (1 << 20);
 }

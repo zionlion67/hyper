@@ -38,6 +38,7 @@ static void *get_multiboot_infos(vaddr_t info_addr, u8 tag_type)
 	return NULL;
 }
 
+#if 0
 static const char *multiboot_mmap_entry_types[] = {
 	[1] = "AVAILABLE",
 	[2] = "RESERVED",
@@ -60,6 +61,7 @@ static void dump_memory_map(struct multiboot_tag_mmap *mmap)
 		m = (multiboot_memory_map_t *)((u8 *)m + mmap->entry_size);
 	}
 }
+#endif
 
 void hyper_main(u32 magic, u32 info_addr)
 {
@@ -67,16 +69,16 @@ void hyper_main(u32 magic, u32 info_addr)
 		return;
 
 	vaddr_t mbi_addr = phys_to_virt(info_addr);
+#if 0
 	struct multiboot_tag_string *c = get_multiboot_infos(mbi_addr,
 				  MULTIBOOT_TAG_TYPE_CMDLINE);
 	if (c)
 		printf("Commandline: %s\n", c->string);
-
+#endif
 	struct multiboot_tag_mmap *mmap = get_multiboot_infos(mbi_addr,
 				MULTIBOOT_TAG_TYPE_MMAP);
-	if (mmap)
-		dump_memory_map(mmap);
-
+	if (!mmap)
+		goto halt;
 	init_idt();
 	load_tss();
 	memory_init(mmap);
@@ -93,6 +95,7 @@ void hyper_main(u32 magic, u32 info_addr)
 	vmm_init(&vmm);
 	asm volatile ("int $0");
 
+halt:
 	for (;;)
 		asm volatile ("hlt");
 }

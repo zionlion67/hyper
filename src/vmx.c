@@ -362,6 +362,8 @@ static void vmcs_write_guest_reg_state(struct vmcs_guest_register_state *state)
 	__vmwrite(GUEST_RFLAGS, state->rflags);
 	__vmwrite(GUEST_RSP, state->rsp);
 	__vmwrite(GUEST_RIP, state->rip);
+
+	__vmwrite(GUEST_ACTIVITY_STATE, 0);
 }
 
 static void vmcs_write_guest_state(struct vmcs_guest_state *state)
@@ -431,9 +433,12 @@ int vmm_init(struct vmm *vmm)
 	vmcs_write_vm_exit_controls(vmm);
 	vmcs_write_vm_entry_controls(vmm);
 	vmcs_write_vm_host_state(vmm);
+
+	dump_guest_state(&vmm->guest_state);
 	vmcs_write_vm_guest_state(vmm);
 
 	printf("Hello from VMX ROOT\n");
+	printf("Entering guest ...\n");
 
 	if (__vmlaunch()) {
 		printf("VMLAUNCH failed\n");

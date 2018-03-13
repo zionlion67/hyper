@@ -248,7 +248,7 @@ struct segment_descriptor {
 	};
 	/* GUEST_*_SELECTOR */
 	enum vmcs_field	base_field;
-};
+} __packed;
 
 struct segment_descriptors {
 	struct segment_descriptor cs;
@@ -311,6 +311,7 @@ struct vmm {
 
 int has_vmx_support(void);
 int vmm_init(struct vmm *);
+void dump_guest_state(struct vmcs_guest_state *state);
 
 /*
  * Assembly magic to execute VMX instructions that
@@ -367,6 +368,7 @@ static inline u8 __vmread(enum vmcs_field field, u64 *val)
 
 static inline void __vmwrite(enum vmcs_field field, u64 value)
 {
+	printf("VMWRITE: 0x%x = 0x%lx\n", field, value);
 	asm volatile goto ("vmwrite %1, %0\n\t"
 		      	   "jbe %l2\n\t"
 		      	   :
