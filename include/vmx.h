@@ -312,6 +312,7 @@ struct vmm {
 int has_vmx_support(void);
 int vmm_init(struct vmm *);
 void dump_guest_state(struct vmcs_guest_state *state);
+const char *get_vmcs_field_str(enum vmcs_field field);
 
 /*
  * Assembly magic to execute VMX instructions that
@@ -366,9 +367,18 @@ static inline u8 __vmread(enum vmcs_field field, u64 *val)
 	return err;
 }
 
+static inline const char *vmcs_field_str(enum vmcs_field field)
+{
+	return get_vmcs_field_str(field);
+}
+
 static inline void __vmwrite(enum vmcs_field field, u64 value)
 {
-	printf("VMWRITE: 0x%x = 0x%lx\n", field, value);
+	const char *str = vmcs_field_str(field);
+	if (str)
+		printf("VMWRITE: %s = 0x%lx\n", str, value);
+	else
+		printf("VMWRITE: 0x%x = 0x%lx\n", field, value);
 	asm volatile goto ("vmwrite %1, %0\n\t"
 		      	   "jbe %l2\n\t"
 		      	   :

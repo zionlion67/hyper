@@ -250,7 +250,7 @@ static void vmcs_write_vm_exit_controls(struct vmm *vmm)
 
 static void vmcs_write_vm_entry_controls(struct vmm *vmm)
 {
-	vmcs_write_control(vmm, VM_ENTRY_CONTROLS, 0,
+	vmcs_write_control(vmm, VM_ENTRY_CONTROLS, VM_ENTRY_LOAD_MSR_EFER,
 			   MSR_VMX_TRUE_ENTRY_CTLS);
 }
 

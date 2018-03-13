@@ -6,6 +6,8 @@
 #define __align(va, sz) ((va) & ~(sz - 1))
 #define __align_n(va, sz) (__align(va, sz) + sz)
 
+#define array_size(array) (sizeof(array) / sizeof(*array))
+
 #define NULL ((void *)0)
 
 #define offsetof(type, field) \
@@ -15,6 +17,5 @@
 	((type *)((char *)addr - offsetof(type, field)))
 
 #define ERR_PTR(x) ((void *)x)
-	
 
 #endif
