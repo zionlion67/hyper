@@ -200,6 +200,8 @@ static const struct vmcs_field_str vmcs_field_str_array[] = {
 	{ HOST_SYSENTER_EIP,		"HOST_SYSENTER_EIP" },
 	{ HOST_RSP,			"HOST_RSP" },
 	{ HOST_RIP,			"HOST_RIP" },
+
+	{ GUEST_INTERRUPTIBILITY_INFO,	"GUEST_INTERRUPTIBILITY_INFO" },
 };
 
 const char *get_vmcs_field_str(const enum vmcs_field field)

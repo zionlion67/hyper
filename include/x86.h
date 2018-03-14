@@ -147,5 +147,19 @@ static inline u16 __str(void)
 	return ret;
 }
 
+static inline u64 read_dr7(void)
+{
+	return __readq(dr7);
+}
+
+static inline u64 read_rflags(void)
+{
+	u64 ret;
+	asm volatile ("pushfq\n\t"
+		      "popq %0"
+		      : "=r"(ret) ::);
+	return ret;
+}
+
 #endif /* !__ASM__ */
 #endif /* !_X86_H_ */

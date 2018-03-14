@@ -80,6 +80,10 @@ void vm_exit_handler(struct vmm *vmm)
 	if (__vmread(VM_EXIT_REASON, &exit_code))
 		printf("VMREAD failed\n");
 	printf("reason: %s (%u)\n", vm_exit_reason_str[exit_code & 0xff], exit_code & 0xff);
+	u64 qual;
+	if (__vmread(EXIT_QUALIFICATION, &qual))
+		printf("VMREAD failed\n");
+	printf("qual: 0x%lx\n", qual);
 	for (;;)
 		asm volatile ("hlt");
 	return;

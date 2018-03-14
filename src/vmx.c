@@ -76,7 +76,7 @@ static void setup_eptp(struct eptp *eptp, struct ept_pml4e *ept_pml4)
 {
 	eptp->quad_word = 0;
 	eptp->type = EPT_MEMORY_TYPE_WB;
-	eptp->page_walk_length = 1; /* 1G page uses 2 EPT structures */
+	eptp->page_walk_length = 4; /* 1G page uses 2 EPT structures */
 	eptp->enable_dirty_flag = 1;
 	eptp->pml4_addr = virt_to_phys(ept_pml4) >> PAGE_SHIFT;
 }
@@ -232,14 +232,13 @@ static inline void vmcs_write_proc_based_ctrls2(struct vmm *vmm, u64 ctl)
 static void vmcs_write_vm_exec_controls(struct vmm *vmm)
 {
 	vmcs_write_pin_based_ctrls(vmm, 0);
-	vmcs_write_proc_based_ctrls(vmm, VM_EXEC_ENABLE_PROC_CTLS2);
-	vmcs_write_proc_based_ctrls2(vmm,
-			VM_EXEC_ENABLE_EPT|VM_EXEC_UNRESTRICTED_GUEST);
+	vmcs_write_proc_based_ctrls(vmm, 0);//VM_EXEC_ENABLE_PROC_CTLS2);
+	vmcs_write_proc_based_ctrls2(vmm, 0);
 
 	__vmwrite(EXCEPTION_BITMAP, 0);
 	__vmwrite(CR0_READ_SHADOW, vmm->host_state.control_regs.cr0);
 	__vmwrite(CR4_READ_SHADOW, vmm->host_state.control_regs.cr4);
-	__vmwrite(EPT_POINTER, vmm->eptp.quad_word);
+	//__vmwrite(EPT_POINTER, vmm->eptp.quad_word);
 }
 
 static void vmcs_write_vm_exit_controls(struct vmm *vmm)
@@ -250,7 +249,7 @@ static void vmcs_write_vm_exit_controls(struct vmm *vmm)
 
 static void vmcs_write_vm_entry_controls(struct vmm *vmm)
 {
-	vmcs_write_control(vmm, VM_ENTRY_CONTROLS, VM_ENTRY_LOAD_MSR_EFER,
+	vmcs_write_control(vmm, VM_ENTRY_CONTROLS, VM_ENTRY_IA32E_GUEST,
 			   MSR_VMX_TRUE_ENTRY_CTLS);
 }
 
@@ -364,6 +363,7 @@ static void vmcs_write_guest_reg_state(struct vmcs_guest_register_state *state)
 	__vmwrite(GUEST_RIP, state->rip);
 
 	__vmwrite(GUEST_ACTIVITY_STATE, 0);
+	__vmwrite(GUEST_INTERRUPTIBILITY_INFO, 0);
 }
 
 static void vmcs_write_guest_state(struct vmcs_guest_state *state)
@@ -395,6 +395,8 @@ int vmm_init(struct vmm *vmm)
 
 	u64 cr4 = read_cr4();
 	cr4 |= CR4_VMXE;
+	write_cr4(cr4);
+	cr4 = read_cr4();
 	cr4 |= vmm->vmx_msr[VMM_MSR_VMX_CR4_FIXED0];
 	cr4 &= vmm->vmx_msr[VMM_MSR_VMX_CR4_FIXED1];
 	write_cr4(cr4);
