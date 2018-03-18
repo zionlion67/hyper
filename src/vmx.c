@@ -76,7 +76,7 @@ static void setup_eptp(struct eptp *eptp, struct ept_pml4e *ept_pml4)
 {
 	eptp->quad_word = 0;
 	eptp->type = EPT_MEMORY_TYPE_WB;
-	eptp->page_walk_length = 4; /* 1G page uses 2 EPT structures */
+	eptp->page_walk_length = 3; /* 1G page uses 2 EPT structures */
 	eptp->enable_dirty_flag = 1;
 	eptp->pml4_addr = virt_to_phys(ept_pml4) >> PAGE_SHIFT;
 }
@@ -92,13 +92,13 @@ static void setup_ept_range(struct vmm *vmm, paddr_t host_start,
 	struct ept_pml4e *ept_pml4 = (vaddr_t)vmm->vmx_on + 2 * PAGE_SIZE;
 	struct ept_huge_pdpte *ept_pdpt = (vaddr_t)ept_pml4 + PAGE_SIZE;
 
-	u64 nb_1g_page = (host_end - host_start) / _1GB + 1;
-
 	struct ept_pml4e *pml4e = ept_pml4 + pmd_offset(guest_start);
 	pml4e->read = 1;
 	pml4e->write = 1;
 	pml4e->kern_exec = 1;
 	pml4e->paddr = virt_to_phys(ept_pdpt) >> PAGE_SHIFT;
+	u64 nb_1g_page = (host_end - host_start) / _1GB + 1;
+	(void)nb_1g_page;
 
 	struct ept_huge_pdpte *huge_pdpte = ept_pdpt + pud_offset(guest_start);
 	for (u64 i = 0; i < EPT_PTRS_PER_TABLE && i < nb_1g_page; ++i) {
@@ -232,13 +232,13 @@ static inline void vmcs_write_proc_based_ctrls2(struct vmm *vmm, u64 ctl)
 static void vmcs_write_vm_exec_controls(struct vmm *vmm)
 {
 	vmcs_write_pin_based_ctrls(vmm, 0);
-	vmcs_write_proc_based_ctrls(vmm, 0);//VM_EXEC_ENABLE_PROC_CTLS2);
-	vmcs_write_proc_based_ctrls2(vmm, 0);
+	vmcs_write_proc_based_ctrls(vmm, VM_EXEC_ENABLE_PROC_CTLS2);
+	vmcs_write_proc_based_ctrls2(vmm, VM_EXEC_UNRESTRICTED_GUEST|VM_EXEC_ENABLE_EPT);
 
 	__vmwrite(EXCEPTION_BITMAP, 0);
 	__vmwrite(CR0_READ_SHADOW, vmm->host_state.control_regs.cr0);
 	__vmwrite(CR4_READ_SHADOW, vmm->host_state.control_regs.cr4);
-	//__vmwrite(EPT_POINTER, vmm->eptp.quad_word);
+	__vmwrite(EPT_POINTER, vmm->eptp.quad_word);
 }
 
 static void vmcs_write_vm_exit_controls(struct vmm *vmm)
@@ -249,7 +249,7 @@ static void vmcs_write_vm_exit_controls(struct vmm *vmm)
 
 static void vmcs_write_vm_entry_controls(struct vmm *vmm)
 {
-	vmcs_write_control(vmm, VM_ENTRY_CONTROLS, VM_ENTRY_IA32E_GUEST,
+	vmcs_write_control(vmm, VM_ENTRY_CONTROLS, 0,
 			   MSR_VMX_TRUE_ENTRY_CTLS);
 }
 
@@ -413,7 +413,7 @@ int vmm_init(struct vmm *vmm)
 		goto free_vmcs;
 	}
 
-	setup_test_guest(vmm);
+	setup_test_guest32(vmm);
 
 	if (__vmxon(virt_to_phys(vmm->vmx_on))) {
 		printf("VMXON failed\n");

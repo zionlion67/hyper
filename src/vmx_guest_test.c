@@ -8,11 +8,11 @@ static void gate_to_seg_desc(struct gdt_desc *gdt_desc,
 		             struct segment_descriptor *seg_desc, u16 sel,
 			     enum vmcs_field base_field)
 {
-	seg_desc->selector = 0; (void)sel;
+	seg_desc->selector = sel;
 	seg_desc->base = ((u64)gdt_desc->base_lo|((u64)gdt_desc->base_mi << 16)
 			 |((u64)gdt_desc->base_hi << 24));
 
-	seg_desc->limit = ((u32)gdt_desc->limit_lo|((u32)gdt_desc->limit_hi << 16));
+	seg_desc->limit = ~(u32)0;
 
 	seg_desc->access = 0;
 	seg_desc->type = gdt_desc->type;
@@ -47,7 +47,8 @@ static const char *test_code32 =
 void setup_test_guest32(struct vmm *vmm)
 {
 	struct vmcs_guest_register_state *reg_state = &vmm->guest_state.reg_state;
-	reg_state->control_regs.cr0 = 0x60000031;//vmm->host_state.control_regs.cr0 & ~CR0_PG;
+	reg_state->control_regs.cr0 = vmm->host_state.control_regs.cr0 & ~CR0_PG;
+	reg_state->control_regs.cr4 = vmm->host_state.control_regs.cr4;
 
 	struct gdt_desc *gdt = get_gdt_ptr();
 	struct gdt_desc *cs_desc = gdt + (VMM_HOST_SEL(vmm, cs) >> 3);
@@ -58,6 +59,7 @@ void setup_test_guest32(struct vmm *vmm)
 			 VMM_HOST_SEL(vmm, cs), GUEST_CS_SELECTOR);
 	reg_state->seg_descs.cs.type = 0xb;
 	reg_state->seg_descs.cs.selector = 0x8;
+	reg_state->seg_descs.cs.l = 0;
 	gate_to_seg_desc(ds_desc, &reg_state->seg_descs.ds,
 			 VMM_HOST_SEL(vmm, ds), GUEST_DS_SELECTOR);
 	gate_to_seg_desc(ds_desc, &reg_state->seg_descs.ss,
@@ -70,12 +72,12 @@ void setup_test_guest32(struct vmm *vmm)
 			 VMM_HOST_SEL(vmm, gs), GUEST_GS_SELECTOR);
 
 	reg_state->seg_descs.tr.base_field = GUEST_TR_SELECTOR;
-	reg_state->seg_descs.tr.selector = 0;
+	reg_state->seg_descs.tr.selector = 0x18;
 	reg_state->seg_descs.tr.type = 0xb /* 32-bit busy TSS */;
 	reg_state->seg_descs.tr.s = 0;
 	reg_state->seg_descs.tr.p = 1;
 	reg_state->seg_descs.tr.g = 0;
-	reg_state->seg_descs.tr.limit = 0x0;
+	reg_state->seg_descs.tr.limit = 103;
 	reg_state->seg_descs.ldtr.base_field = GUEST_LDTR_SELECTOR;
 	reg_state->seg_descs.ldtr.unusable = 1;
 
@@ -89,6 +91,7 @@ void setup_test_guest32(struct vmm *vmm)
 
 	memcpy(vmm->guest_mem_start + (1 << 20), test_code32, SIZEOF_TEST_CODE);
 
+	reg_state->dr7 = 0x400;
 	reg_state->rflags = 0x2;
 	reg_state->rsp = 0x400000;
 	reg_state->rip = (1 << 20);
@@ -190,10 +193,13 @@ void setup_test_guest(struct vmm *vmm)
 
 	memcpy(&reg_state->msr, &vmm->host_state.msr, sizeof(struct vmcs_state_msr));
 
+	memcpy(vmm->guest_mem_start + (1 << 20), test_code32, SIZEOF_TEST_CODE);
+
 	reg_state->dr7 = read_dr7();
 	reg_state->rflags = read_rflags() | 0x2;
 	reg_state->rsp = read_rsp();
-	reg_state->rip = (u64)test_code;
+	reg_state->rip = vmm->guest_mem_start + (1 << 20);
+	(void)test_code;
 
 	vmm->guest_state.vmcs_link = (u64)-1ULL;
 }
