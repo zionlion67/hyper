@@ -436,7 +436,10 @@ int vmm_init(struct vmm *vmm)
 	vmcs_write_vm_entry_controls(vmm);
 	vmcs_write_vm_host_state(vmm);
 
+#ifdef DEBUG
 	dump_guest_state(&vmm->guest_state);
+#endif
+
 	vmcs_write_vm_guest_state(vmm);
 
 	printf("Hello from VMX ROOT\n");

@@ -28,7 +28,7 @@ LIBC_OBJS=$(LIBC_DIR)/printf.o \
 
 CC=gcc
 CPPFLAGS += -I$(INCLUDE_DIR) -I$(LIBC_DIR)/include
-CFLAGS = -Wall -Wextra -Werror -std=gnu99 -g3 -fno-stack-protector \
+CFLAGS += -Wall -Wextra -Werror -std=gnu99 -g3 -fno-stack-protector \
 	 -fno-builtin -ffreestanding -Wno-pointer-to-int-cast      \
 	 -Wno-int-to-pointer-cast -Wno-incompatible-pointer-types  \
 	 -Wno-int-conversion -fno-plt
@@ -46,6 +46,7 @@ iso: $(ISO)
 run: $(ISO)
 	qemu-system-x86_64 -cdrom $(ISO) -cpu host -enable-kvm -serial stdio -m 4G
 
+debug: CFLAGS+= -DDEBUG
 debug: $(ISO)
 	qemu-system-x86_64 -cdrom $(ISO) -serial stdio -s -S
 

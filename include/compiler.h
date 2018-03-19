@@ -1,7 +1,10 @@
 #ifndef _COMPILER_H_
 #define _COMPILER_H_
 
-#define __packed __attribute__((packed))
+#define __packed 	__attribute__((packed))
+#define __unused 	__attribute__((unused))
+#define __maybe_unused 	__unused
+#define __used		__attribute__((used))
 
 #define __align(va, sz) ((va) & ~(sz - 1))
 #define __align_n(va, sz) (__align(va, sz) + sz)

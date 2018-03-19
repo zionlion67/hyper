@@ -1,11 +1,49 @@
+#include <panic.h>
 #include <vmx.h>
 
 asm (
 	".global vm_exit_stub\n\t"
 	"vm_exit_stub:\n\t"
 	"movq	(%rsp), %rdi\n\t"
-	"callq  vm_exit_handler"
+	"movq	$0x00004402, %rax\n\t"
+	"subq	$8, %rsp\n\t"
+	"movq	%rsp, %rdx\n\t"
+	"vmread	%rax, (%rdx)\n\t" /* VMREAD EXIT_REASON */
+	"jbe	1f\n\t"
+	"movq	(%rdx), %rsi\n\t"
+	"movq	%rsi, %rax\n\t"
+	"andq	$0xff, %rax\n\t"
+	"jmp	2f\n\t"
+	"1:\n\t"  /* failed VMREAD */
+	"movq	$-1, %rsi\n\t"
+	"callq	error_handler\n\t"
+	"2:\n\t"
+	"callq  *vm_exit_handlers(,%rax,8)"
 );
+
+struct vm_exit_code {
+	union {
+		struct {
+			u16	exit_reason;
+			u32	reserved1 : 11;
+			u32	enclave : 1;
+			u32	pending_mtf : 1;
+			u32	vmx_root : 1;
+			u32	reserved2 : 1;
+			u32	vm_entry : 1;
+		};
+		u32	dword;
+	};
+} __packed;
+
+typedef void (*vm_exit_handler_t)(struct vmm *vmm,
+				  struct vm_exit_code exit_code);
+
+
+static __used void error_handler(void)
+{
+	panic("VMREAD failed on VM-exit\n");
+}
 
 static const char *vm_exit_reason_str[] = {
 	[0] = "Exception or NMI",
@@ -72,19 +110,21 @@ static const char *vm_exit_reason_str[] = {
 	[64] = "XRSTORS",
 };
 
-void vm_exit_handler(struct vmm *vmm)
+void default_vm_exit_handler(struct vmm *vmm __maybe_unused,
+			     struct vm_exit_code exit_code __maybe_unused)
 {
-	(void)vmm;
-	printf("VM EXIT\n");
-	u64 exit_code;
-	if (__vmread(VM_EXIT_REASON, &exit_code))
-		printf("VMREAD failed\n");
-	printf("reason: %s (%u)\n", vm_exit_reason_str[exit_code & 0xff], exit_code & 0xff);
+	u16 exit_no = exit_code.exit_reason;
+	printf("reason: %s (%u)\n", vm_exit_reason_str[exit_no], exit_no);
+
 	u64 qual;
 	if (__vmread(EXIT_QUALIFICATION, &qual))
 		printf("VMREAD failed\n");
+
 	printf("qual: 0x%lx\n", qual);
-	for (;;)
-		asm volatile ("hlt");
-	return;
+	panic("");
 }
+
+#define NR_EXIT_REASONS 64
+static __used vm_exit_handler_t vm_exit_handlers[NR_EXIT_REASONS] = {
+	[ 0 ... NR_EXIT_REASONS - 1 ] = default_vm_exit_handler,
+};

@@ -83,12 +83,6 @@ void hyper_main(u32 magic, u32 info_addr)
 	load_tss();
 	memory_init(mmap);
 	init_kmalloc();
-	for (int i = 0; i < 3; ++i) {
-		char *toto = kmalloc(32);
-		print64((vaddr_t)toto);
-		printf("\n");
-		kfree(toto);
-	}
 	if (has_vmx_support())
 		printf("VMX supported !\n");
 	struct vmm vmm;
