@@ -27,7 +27,7 @@ LIBC_OBJS=$(LIBC_DIR)/printf.o \
 	  $(LIBC_DIR)/memcpy.o
 
 CC=gcc
-CPPFLAGS += -I$(INCLUDE_DIR) -I$(LIBC_DIR)/include
+CPPFLAGS += -I$(INCLUDE_DIR) -I$(LIBC_DIR)/include -DDEBUG
 CFLAGS += -Wall -Wextra -Werror -std=gnu99 -g3 -fno-stack-protector \
 	 -fno-builtin -ffreestanding -Wno-pointer-to-int-cast      \
 	 -Wno-int-to-pointer-cast -Wno-incompatible-pointer-types  \

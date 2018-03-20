@@ -67,8 +67,6 @@ static inline void release_vmcs(struct vmcs *vmcs)
 	release_page(vmcs);
 }
 
-#define _1GB	(1024 * 1024 * 1024)
-
 /* Write back caching */
 #define EPT_MEMORY_TYPE_WB	0x6
 
@@ -81,7 +79,11 @@ static void setup_eptp(struct eptp *eptp, struct ept_pml4e *ept_pml4)
 	eptp->pml4_addr = virt_to_phys(ept_pml4) >> PAGE_SHIFT;
 }
 
-/* Build EPT structures. XXX: ATM, only 1GB RWX pages */
+/*
+ * Build EPT structures.
+ * XXX: atm, KVM only support nested EPT translations using 4 level structures
+ * (not more not less), so we'll stick to that.
+ */
 static void setup_ept_range(struct vmm *vmm, paddr_t host_start,
 			    paddr_t host_end, paddr_t guest_start)
 {
@@ -90,26 +92,17 @@ static void setup_ept_range(struct vmm *vmm, paddr_t host_start,
 	 * There is 2MB - 8KB of space left for EPT structures.
 	 */
 	struct ept_pml4e *ept_pml4 = (vaddr_t)vmm->vmx_on + 2 * PAGE_SIZE;
-	struct ept_huge_pdpte *ept_pdpt = (vaddr_t)ept_pml4 + PAGE_SIZE;
+	struct ept_pdpte *ept_pdpt = (vaddr_t)ept_pml4 + PAGE_SIZE;
+	struct ept_pde *ept_pde = (vaddr_t)ept_pdpt + PAGE_SIZE;
 
 	struct ept_pml4e *pml4e = ept_pml4 + pmd_offset(guest_start);
 	pml4e->read = 1;
 	pml4e->write = 1;
 	pml4e->kern_exec = 1;
 	pml4e->paddr = virt_to_phys(ept_pdpt) >> PAGE_SHIFT;
-	u64 nb_1g_page = (host_end - host_start) / _1GB + 1;
-	(void)nb_1g_page;
 
-	struct ept_huge_pdpte *huge_pdpte = ept_pdpt + pud_offset(guest_start);
-	for (u64 i = 0; i < EPT_PTRS_PER_TABLE && i < nb_1g_page; ++i) {
-		huge_pdpte->read = 1;
-		huge_pdpte->write = 1;
-		huge_pdpte->kern_exec = 1;
-		huge_pdpte->memory_type = EPT_MEMORY_TYPE_WB;
-		huge_pdpte->ignore_pat = 1;
-		huge_pdpte->huge_page = 1;
-		huge_pdpte->paddr = host_start + i * _1GB;
-	}
+	/* FIXME add 4 level EPT setup code */
+	(void)ept_pde; (void)host_start; (void)host_end;
 
 	setup_eptp(&vmm->eptp, ept_pml4);
 }
@@ -414,6 +407,7 @@ int vmm_init(struct vmm *vmm)
 	}
 
 	setup_test_guest32(vmm);
+	init_vm_exit_handlers(vmm);
 
 	if (__vmxon(virt_to_phys(vmm->vmx_on))) {
 		printf("VMXON failed\n");

@@ -313,6 +313,7 @@ int has_vmx_support(void);
 int vmm_init(struct vmm *);
 void dump_guest_state(struct vmcs_guest_state *state);
 const char *get_vmcs_field_str(enum vmcs_field field);
+int init_vm_exit_handlers(struct vmm *vmm);
 
 /*
  * Assembly magic to execute VMX instructions that
