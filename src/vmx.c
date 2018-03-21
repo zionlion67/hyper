@@ -75,16 +75,57 @@ static void setup_eptp(struct eptp *eptp, struct ept_pml4e *ept_pml4)
 	eptp->quad_word = 0;
 	eptp->type = EPT_MEMORY_TYPE_WB;
 	eptp->page_walk_length = 3; /* 1G page uses 2 EPT structures */
-	eptp->enable_dirty_flag = 1;
+	eptp->enable_dirty_flag = 0;
 	eptp->pml4_addr = virt_to_phys(ept_pml4) >> PAGE_SHIFT;
 }
 
+static inline void ept_set_pte_rwe(void *ept_pte)
+{
+	struct ept_pte *pte = (struct ept_pte *)ept_pte;
+	pte->read = 1;
+	pte->write = 1;
+	pte->kern_exec = 1;
+}
+
+
+static void ept_init_pte(struct ept_pte *ept_pte, paddr_t host_addr)
+{
+	ept_set_pte_rwe(ept_pte);
+	ept_pte->memory_type = EPT_MEMORY_TYPE_WB;
+	ept_pte->ignore_pat = 1;
+	ept_pte->paddr = host_addr;
+}
+
+static int ept_alloc_set_pgtables(struct ept_pde *ept_pde, paddr_t guest_addr,
+				  paddr_t host_addr, u16 nb_entries)
+{
+	vaddr_t pgtable_vaddr = (vaddr_t)alloc_page();
+	if ((void *)pgtable_vaddr == NULL)
+		return 1;
+
+	u16 pmd_off = pmd_offset(guest_addr);
+	for (u16 i = 0; i < nb_entries && pmd_off + i < EPT_PTRS_PER_TABLE; ++i) {
+		struct ept_pde *cur_pde = ept_pde + pmd_off + i;
+		ept_set_pte_rwe(cur_pde);
+
+		struct ept_pte *pte = (void *)(pgtable_vaddr + i * PAGE_SIZE);
+		ept_init_pte(pte, host_addr + i * PAGE_SIZE);
+		
+		cur_pde->paddr = virt_to_phys(pte);
+	}
+
+	return 0;
+}
+
+#define _1GB (1024 * 1024 * 1024)
+#define _2MB (2 << 20)
+
 /*
- * Build EPT structures.
+ * Build EPT structures. Only RWE mappings atm.
  * XXX: atm, KVM only support nested EPT translations using 4 level structures
- * (not more not less), so we'll stick to that.
+ * (not more not less), so we'll stick to that. 512G max supported here.
  */
-static void setup_ept_range(struct vmm *vmm, paddr_t host_start,
+static int ept_setup_range(struct vmm *vmm, paddr_t host_start,
 			    paddr_t host_end, paddr_t guest_start)
 {
 	/*
@@ -95,16 +136,45 @@ static void setup_ept_range(struct vmm *vmm, paddr_t host_start,
 	struct ept_pdpte *ept_pdpt = (vaddr_t)ept_pml4 + PAGE_SIZE;
 	struct ept_pde *ept_pde = (vaddr_t)ept_pdpt + PAGE_SIZE;
 
-	struct ept_pml4e *pml4e = ept_pml4 + pmd_offset(guest_start);
-	pml4e->read = 1;
-	pml4e->write = 1;
-	pml4e->kern_exec = 1;
-	pml4e->paddr = virt_to_phys(ept_pdpt) >> PAGE_SHIFT;
+	struct ept_pml4e *pml4e = ept_pml4 + pgd_offset(guest_start);
+	ept_set_pte_rwe(pml4e);
+	pml4e->paddr = virt_to_phys(ept_pdpt);
+	//TODO FIX PML4
 
-	/* FIXME add 4 level EPT setup code */
-	(void)ept_pde; (void)host_start; (void)host_end;
+	struct ept_pdpte *pdpte = ept_pdpt + pud_offset(guest_start);
+	ept_set_pte_rwe(pdpte);
+
+	/* compute how much EPT PD we can store without allocating a new page */
+	u64 max_pd = (ALLOC_PAGE_SIZE - ((vaddr_t)ept_pde - (vaddr_t)vmm->vmx_on))
+		      / PAGE_SIZE;
+
+	/* one page directory maps 1GB of RAM */
+	u64 needed_pd = (host_end - host_start) / _1GB;
+	if (!needed_pd)
+		needed_pd = 1;
+	if (needed_pd > max_pd)
+		return 1;
+
+	/* one page table maps 2MB of RAM */
+	u16 needed_pgtable = (host_end - host_start) / _2MB;
+	for (u64 i = 0; i < needed_pd; ++i, ++pdpte) {
+		struct ept_pde *cur_pde = (vaddr_t)ept_pde + i * PAGE_SIZE;		
+		pdpte->paddr = virt_to_phys(cur_pde) >> PAGE_SHIFT;
+		
+		u16 nb_pgtable = EPT_PTRS_PER_TABLE;
+		if (i == needed_pd - 1)
+			nb_pgtable = needed_pgtable - i * EPT_PTRS_PER_TABLE;
+		if (ept_alloc_set_pgtables(cur_pde,
+					   guest_start + i * ALLOC_PAGE_SIZE,
+					   host_start + i * ALLOC_PAGE_SIZE,
+					   nb_pgtable)) {
+			return 1;
+		}
+	}
 
 	setup_eptp(&vmm->eptp, ept_pml4);
+
+	return 0;
 }
 
 
@@ -118,7 +188,8 @@ static int setup_ept(struct vmm *vmm)
 
 	paddr_t start = virt_to_phys(p);
 	paddr_t end = start + nb_pages * ALLOC_PAGE_SIZE;
-	setup_ept_range(vmm, start, end, 0);
+	if (ept_setup_range(vmm, start, end, 0))
+		return 1;
 	vmm->guest_mem_start = p;
 	vmm->guest_mem_end = phys_to_virt(end);
 	return 0;

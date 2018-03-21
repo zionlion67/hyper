@@ -141,6 +141,7 @@ static int add_vm_exit_handler(const u32 n, vm_exit_handler_t handler)
 static void ept_violation_handler(struct vmm *vmm __maybe_unused,
 				  struct vm_exit_code exit_code __maybe_unused)
 {
+	printf("VM EXIT\n");
 	u64 qual;
 	__vmread(EXIT_QUALIFICATION, &qual);
 	printf("EPT Error code: ", qual);
@@ -156,7 +157,6 @@ static void ept_violation_handler(struct vmm *vmm __maybe_unused,
 	if (qual & (1 << 2))
 		X(EXEC);
 	if (qual & (1 << 7)) {
-		X(GUEST_ADDR_VALID);
 		__vmread(GUEST_LINEAR_ADDRESS, &guest_addr);
 		if (qual & (1 << 8))
 			X(EPT_LINEAR);

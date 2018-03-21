@@ -48,7 +48,7 @@ void setup_test_guest32(struct vmm *vmm)
 {
 	struct vmcs_guest_register_state *reg_state = &vmm->guest_state.reg_state;
 	reg_state->control_regs.cr0 = vmm->host_state.control_regs.cr0 & ~CR0_PG;
-	reg_state->control_regs.cr4 = vmm->host_state.control_regs.cr4;
+	reg_state->control_regs.cr4 = vmm->host_state.control_regs.cr4 & ~CR4_PAE;
 
 	struct gdt_desc *gdt = get_gdt_ptr();
 	struct gdt_desc *cs_desc = gdt + (VMM_HOST_SEL(vmm, cs) >> 3);
