@@ -164,10 +164,13 @@ static void ept_violation_handler(struct vmm *vmm __maybe_unused,
 			X(EPT_PAGING_ENTRY);
 	}
 #undef X
-	printf(" (0x%lx)\n", qual);
+	//TODO add guest state dumper
+	printf(" (0x%x%x)\n", qual >> 32, qual & 0xffffffff);
 	printf("Guest linear addr: 0x%lx\n", guest_addr);
 	__vmread(GUEST_PHYSICAL_ADDRESS, &guest_addr);
 	printf("Guest physical addr: 0x%lx\n", guest_addr);
+	__vmread(GUEST_RIP, &guest_addr);
+	printf("Guest RIP: 0x%lx\n", guest_addr);
 	panic("");
 }
 

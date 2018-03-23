@@ -74,7 +74,7 @@ static void setup_eptp(struct eptp *eptp, struct ept_pml4e *ept_pml4)
 {
 	eptp->quad_word = 0;
 	eptp->type = EPT_MEMORY_TYPE_WB;
-	eptp->page_walk_length = 3; /* 1G page uses 2 EPT structures */
+	eptp->page_walk_length = 3;
 	eptp->enable_dirty_flag = 0;
 	eptp->pml4_addr = virt_to_phys(ept_pml4) >> PAGE_SHIFT;
 }
@@ -88,16 +88,22 @@ static inline void ept_set_pte_rwe(void *ept_pte)
 }
 
 
-static void ept_init_pte(struct ept_pte *ept_pte, paddr_t host_addr)
+//TODO add nb page
+static void ept_init_pt(struct ept_pte *ept_pte, paddr_t host_addr,
+			 paddr_t guest_addr)
 {
-	ept_set_pte_rwe(ept_pte);
-	ept_pte->memory_type = EPT_MEMORY_TYPE_WB;
-	ept_pte->ignore_pat = 1;
-	ept_pte->paddr = host_addr;
+	u16 pte_off = pte_offset(guest_addr);
+	for (u16 i = 0; pte_off < EPT_PTRS_PER_TABLE; ++pte_off, ++i) {
+		struct ept_pte *pte = ept_pte + pte_off;
+		ept_set_pte_rwe(pte);
+		pte->memory_type = EPT_MEMORY_TYPE_WB;
+		pte->ignore_pat = 1;
+		pte->paddr = (host_addr + i * PAGE_SIZE) >> PAGE_SHIFT;
+	}
 }
 
-static int ept_alloc_set_pgtables(struct ept_pde *ept_pde, paddr_t guest_addr,
-				  paddr_t host_addr, u16 nb_entries)
+static int ept_alloc_set_pgtables(struct ept_pde *ept_pde, paddr_t host_addr,
+				  paddr_t guest_addr, u16 nb_entries)
 {
 	vaddr_t pgtable_vaddr = (vaddr_t)alloc_page();
 	if ((void *)pgtable_vaddr == NULL)
@@ -106,12 +112,9 @@ static int ept_alloc_set_pgtables(struct ept_pde *ept_pde, paddr_t guest_addr,
 	u16 pmd_off = pmd_offset(guest_addr);
 	for (u16 i = 0; i < nb_entries && pmd_off + i < EPT_PTRS_PER_TABLE; ++i) {
 		struct ept_pde *cur_pde = ept_pde + pmd_off + i;
-		ept_set_pte_rwe(cur_pde);
-
-		struct ept_pte *pte = (void *)(pgtable_vaddr + i * PAGE_SIZE);
-		ept_init_pte(pte, host_addr + i * PAGE_SIZE);
-		
-		cur_pde->paddr = virt_to_phys(pte);
+		struct ept_pte *pt = (void *)(pgtable_vaddr + i * PAGE_SIZE);
+		ept_init_pt(pt, host_addr + i * ALLOC_PAGE_SIZE, guest_addr);
+		cur_pde->paddr = virt_to_phys(pt) >> PAGE_SHIFT;
 	}
 
 	return 0;
@@ -138,8 +141,7 @@ static int ept_setup_range(struct vmm *vmm, paddr_t host_start,
 
 	struct ept_pml4e *pml4e = ept_pml4 + pgd_offset(guest_start);
 	ept_set_pte_rwe(pml4e);
-	pml4e->paddr = virt_to_phys(ept_pdpt);
-	//TODO FIX PML4
+	pml4e->paddr = virt_to_phys(ept_pdpt) >> PAGE_SHIFT;
 
 	struct ept_pdpte *pdpte = ept_pdpt + pud_offset(guest_start);
 	ept_set_pte_rwe(pdpte);
@@ -159,14 +161,16 @@ static int ept_setup_range(struct vmm *vmm, paddr_t host_start,
 	u16 needed_pgtable = (host_end - host_start) / _2MB;
 	for (u64 i = 0; i < needed_pd; ++i, ++pdpte) {
 		struct ept_pde *cur_pde = (vaddr_t)ept_pde + i * PAGE_SIZE;		
+		ept_set_pte_rwe(cur_pde);
 		pdpte->paddr = virt_to_phys(cur_pde) >> PAGE_SHIFT;
 		
 		u16 nb_pgtable = EPT_PTRS_PER_TABLE;
 		if (i == needed_pd - 1)
 			nb_pgtable = needed_pgtable - i * EPT_PTRS_PER_TABLE;
+		// FIXME i * ALLOC_PAGE_SIZE is wrong (each pgtable maps 2M)
 		if (ept_alloc_set_pgtables(cur_pde,
-					   guest_start + i * ALLOC_PAGE_SIZE,
 					   host_start + i * ALLOC_PAGE_SIZE,
+					   guest_start + i * ALLOC_PAGE_SIZE,
 					   nb_pgtable)) {
 			return 1;
 		}

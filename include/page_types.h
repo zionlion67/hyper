@@ -27,6 +27,7 @@ typedef unsigned gfp_t;
 #define PAGE_SHIFT	12
 #define PAGE_SIZE	(1UL << PAGE_SHIFT)
 #define PAGE_MASK	(~(PAGE_SIZE - 1))
+#define pte_offset(x)	((((x) & PAGE_MASK) >> PAGE_SHIFT) & 0x1ff)
 
 #define BIG_PAGE_SHIFT	20
 #define BIG_PAGE_SIZE	(1UL << BIG_PAGE_SHIFT)

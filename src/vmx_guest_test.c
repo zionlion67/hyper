@@ -29,19 +29,55 @@ static void gate_to_seg_desc(struct gdt_desc *gdt_desc,
 
 }
 
-#define SIZEOF_TEST_CODE 117
-static const char *test_code32 =
-"\x56\xba\xf8\x03\x00\x00\x53\xb8\x68\x00\x00"
-"\x00\xee\xbb\x65\x00\x00\x00\x89\xd8\xee\xb8"
-"\x6c\x00\x00\x00\xee\xee\xbe\x6f\x00\x00\x00"
-"\x89\xf0\xee\xb9\x20\x00\x00\x00\x89\xc8\xee"
-"\xb8\x66\x00\x00\x00\xee\xb8\x72\x00\x00\x00"
-"\xee\x89\xf0\xee\xb8\x6d\x00\x00\x00\xee\x89"
-"\xc8\xee\xb8\x67\x00\x00\x00\xee\xb8\x75\x00"
-"\x00\x00\xee\x89\xd8\xee\xb8\x73\x00\x00\x00"
-"\xee\xb8\x74\x00\x00\x00\xee\x89\xc8\xee\xb8"
-"\x21\x00\x00\x00\xee\xb8\x0d\x00\x00\x00\xee"
-"\xb8\x0a\x00\x00\x00\xee\xf4";
+/* Did not type this manually ... */
+static void test_code32(void) {
+	asm volatile (  "mov	$0x3f8, %edx\n\t"
+			"mov    $0x68,%eax\n\t"
+			"out    %al,(%dx)\n\t"
+			"mov    $0x65,%ebx\n\t"
+			"mov    %ebx,%eax\n\t"
+			"out    %al,(%dx)\n\t"
+			"mov    $0x6c,%eax\n\t"
+			"out    %al,(%dx)\n\t"
+			"out    %al,(%dx)\n\t"
+			"mov    $0x6f,%esi\n\t"
+			"mov    %esi,%eax\n\t"
+			"out    %al,(%dx)\n\t"
+			"mov    $0x20,%ecx\n\t"
+			"mov    %ecx,%eax\n\t"
+			"out    %al,(%dx)\n\t"
+			"mov    $0x66,%eax\n\t"
+			"out    %al,(%dx)\n\t"
+			"mov    $0x72,%eax\n\t"
+			"out    %al,(%dx)\n\t"
+			"mov    %esi,%eax\n\t"
+			"out    %al,(%dx)\n\t"
+			"mov    $0x6d,%eax\n\t"
+			"out    %al,(%dx)\n\t"
+			"mov    %ecx,%eax\n\t"
+			"out    %al,(%dx)\n\t"
+			"mov    $0x67,%eax\n\t"
+			"out    %al,(%dx)\n\t"
+			"mov    $0x75,%eax\n\t"
+			"out    %al,(%dx)\n\t"
+			"mov    %ebx,%eax\n\t"
+			"out    %al,(%dx)\n\t"
+			"mov    $0x73,%eax\n\t"
+			"out    %al,(%dx)\n\t"
+			"mov    $0x74,%eax\n\t"
+			"out    %al,(%dx)\n\t"
+			"mov    %ecx,%eax\n\t"
+			"out    %al,(%dx)\n\t"
+			"mov    $0x21,%eax\n\t"
+			"out    %al,(%dx)\n\t"
+			"mov    $0xd,%eax\n\t"
+			"out    %al,(%dx)\n\t"
+			"mov    $0xa,%eax\n\t"
+			"out    %al,(%dx)\n\t"
+			"hlt    \n\t");
+}
+
+static void dummy_func(void) {}
 
 #define VMM_HOST_SEL(vmm, seg) (vmm->host_state.selectors.seg)
 void setup_test_guest32(struct vmm *vmm)
@@ -89,7 +125,9 @@ void setup_test_guest32(struct vmm *vmm)
 
 	vmm->guest_state.vmcs_link = (u64)-1ULL;
 
-	memcpy(vmm->guest_mem_start + (1 << 20), test_code32, SIZEOF_TEST_CODE);
+	/* +4 is hack to skip 64 bit prologue */
+	memcpy(vmm->guest_mem_start + (1 << 20), test_code32 + 4,
+	       (u64)dummy_func - (u64)test_code32);
 
 	reg_state->dr7 = 0x400;
 	reg_state->rflags = 0x2;
@@ -193,7 +231,7 @@ void setup_test_guest(struct vmm *vmm)
 
 	memcpy(&reg_state->msr, &vmm->host_state.msr, sizeof(struct vmcs_state_msr));
 
-	memcpy(vmm->guest_mem_start + (1 << 20), test_code32, SIZEOF_TEST_CODE);
+	//memcpy(vmm->guest_mem_start + (1 << 20), test_code32, SIZEOF_TEST_CODE);
 
 	reg_state->dr7 = read_dr7();
 	reg_state->rflags = read_rflags() | 0x2;
