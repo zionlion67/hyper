@@ -87,6 +87,9 @@ static inline void ept_set_pte_rwe(void *ept_pte)
 	pte->kern_exec = 1;
 }
 
+#define _1GB (1024 * 1024 * 1024)
+#define _2MB (2 << 20)
+
 
 //TODO add nb page
 static void ept_init_pt(struct ept_pte *ept_pte, paddr_t host_addr,
@@ -113,15 +116,12 @@ static int ept_alloc_set_pgtables(struct ept_pde *ept_pde, paddr_t host_addr,
 	for (u16 i = 0; i < nb_entries && pmd_off + i < EPT_PTRS_PER_TABLE; ++i) {
 		struct ept_pde *cur_pde = ept_pde + pmd_off + i;
 		struct ept_pte *pt = (void *)(pgtable_vaddr + i * PAGE_SIZE);
-		ept_init_pt(pt, host_addr + i * ALLOC_PAGE_SIZE, guest_addr);
+		ept_init_pt(pt, host_addr + i * _2MB, guest_addr);
 		cur_pde->paddr = virt_to_phys(pt) >> PAGE_SHIFT;
 	}
 
 	return 0;
 }
-
-#define _1GB (1024 * 1024 * 1024)
-#define _2MB (2 << 20)
 
 /*
  * Build EPT structures. Only RWE mappings atm.
@@ -167,13 +167,14 @@ static int ept_setup_range(struct vmm *vmm, paddr_t host_start,
 		u16 nb_pgtable = EPT_PTRS_PER_TABLE;
 		if (i == needed_pd - 1)
 			nb_pgtable = needed_pgtable - i * EPT_PTRS_PER_TABLE;
-		// FIXME i * ALLOC_PAGE_SIZE is wrong (each pgtable maps 2M)
-		if (ept_alloc_set_pgtables(cur_pde,
-					   host_start + i * ALLOC_PAGE_SIZE,
-					   guest_start + i * ALLOC_PAGE_SIZE,
+
+		if (ept_alloc_set_pgtables(cur_pde, host_start, guest_start,
 					   nb_pgtable)) {
 			return 1;
 		}
+
+		host_start += nb_pgtable * _2MB;
+		guest_start += nb_pgtable * _2MB;
 	}
 
 	setup_eptp(&vmm->eptp, ept_pml4);
