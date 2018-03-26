@@ -16,7 +16,8 @@ OBJS = src/boot.o 	\
        src/vmx.o	\
        src/vmx_guest_test.o \
        src/vm_exit.o	\
-       src/vmx_debug.o
+       src/vmx_debug.o	\
+       src/pci.o
 
 LIBC_DIR=src/libc
 LIBC_OBJS=$(LIBC_DIR)/printf.o \

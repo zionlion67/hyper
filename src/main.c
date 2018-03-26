@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <multiboot2.h>
 #include <page.h>
+#include <pci.h>
 #include <memory.h>
 #include <kmalloc.h>
 #include <vmx.h>
@@ -83,6 +84,7 @@ void hyper_main(u32 magic, u32 info_addr)
 	load_tss();
 	memory_init(mmap);
 	init_kmalloc();
+	init_pci();
 	if (has_vmx_support())
 		printf("VMX supported !\n");
 	struct vmm vmm;
