@@ -115,6 +115,39 @@ static void pci_read_config_common(struct pci_addr addr,
 	}
 }
 
+static void pci_print_addr(const struct pci_addr addr)
+{
+	printf("%x.%x.%x\n", addr.bus, addr.dev, addr.func);
+}
+
+static void pci_print_config_common(struct pci_config_common *config)
+{
+	printf("VendorID: 0x%x\tDeviceID: 0x%x\tClass: 0x%x\tHdrType: 0x%x\n",
+			config->vendor_id, config->device_id, config->class,
+			config->header_type);
+}
+
+static void pci_print_config_addr(struct pci_addr addr,
+				  struct pci_config_common *config)
+{
+	pci_print_addr(addr);
+	pci_print_config_common(config);
+}
+
+
+#define PCI_INVALID_VENDOR_ID 0xffff
+static void pci_bus_enum_dev_func(struct pci_addr addr,
+				  struct pci_config_common *config)
+{
+	for (u8 f = 1; f < 8; ++f) {
+		addr.func = f;
+		pci_read_config_common(addr, config);
+		if (config->vendor_id != PCI_INVALID_VENDOR_ID)
+			pci_print_config_addr(addr, config);
+	}
+}
+
+
 /* TODO add multiple functions support + real actions */
 static void pci_bus_enum_devices(u8 bus) {
 
@@ -128,12 +161,13 @@ static void pci_bus_enum_devices(u8 bus) {
 		struct pci_config_common config;
 		pci_read_config_common(addr, &config);
 
-		if (config.vendor_id == 0xffff)
+		if (config.vendor_id == PCI_INVALID_VENDOR_ID)
 			continue;
 
-		printf("VendorID: 0x%x\tDeviceID: 0x%x\tClass: 0x%x\tHdrType: 0x%x\n",
-		       config.vendor_id, config.device_id, config.class,
-		       config.header_type);
+		pci_print_config_common(&config);
+
+		if (config.header_type.multiple_func)
+			pci_bus_enum_dev_func(addr, &config);
 	}
 	printf("\n");
 }
