@@ -108,29 +108,56 @@ static inline u32 pci_read_config_dword(const struct pci_addr addr)
 static void pci_read_config_common(struct pci_addr addr,
 				   struct pci_config_common *config)
 {
-	for (u16 i = 0; i < sizeof(struct pci_config_common); i += 4) {
+	for (u16 i = 0; i < sizeof(struct pci_config_common) / sizeof(u32); i++) {
 		addr.reg = i;
-		u32 *tmp = (u8 *)config + i;
+		u32 *tmp = (u8 *)config + i * sizeof(u32);
 		*tmp = pci_read_config_dword(addr);
 	}
 }
 
-static void pci_print_addr(const struct pci_addr addr)
+#define PCI_NR_CLASS 0x12
+static const char *__pci_dev_class_str[PCI_NR_CLASS] = {
+	"Class not supported",
+	"Mass storage controller",
+	"Network controller",
+	"Display controller",
+	"Multimedia controller",
+	"Memory controller",
+	"Bridge device",
+	"Simple communication controllers",
+	"Base System Peripherals",
+	"Input Devices",
+	"Docking stations",
+	"Processors",
+	"Serial bus controller",
+	"Wireless controller",
+	"Intelligent I/O controller",
+	"Satellite Communication controller",
+	"Encryption/Decryption controller",
+	"Data acquisition and signal processing controller",
+};
+
+static inline const char *pci_dev_class_str(const u8 class)
 {
-	printf("%x.%x.%x\n", addr.bus, addr.dev, addr.func);
+	if (class < PCI_NR_CLASS)
+		return __pci_dev_class_str[class];
+	else if (class != 0xff)
+		return "Reserved";
+	else
+		return "Not defined";
 }
 
 static void pci_print_config_common(struct pci_config_common *config)
 {
-	printf("VendorID: 0x%x\tDeviceID: 0x%x\tClass: 0x%x\tHdrType: 0x%x\n",
-			config->vendor_id, config->device_id, config->class,
-			config->header_type);
+	printf("VendorID: 0x%x\tDeviceID: 0x%x\tClass: %s (0x%x)\n",
+			config->vendor_id, config->device_id,
+			pci_dev_class_str(config->class), config->class);
 }
 
 static void pci_print_config_addr(struct pci_addr addr,
 				  struct pci_config_common *config)
 {
-	pci_print_addr(addr);
+	printf("%02x:%02x.%x\t", addr.bus, addr.dev, addr.func);
 	pci_print_config_common(config);
 }
 
@@ -164,7 +191,7 @@ static void pci_bus_enum_devices(u8 bus) {
 		if (config.vendor_id == PCI_INVALID_VENDOR_ID)
 			continue;
 
-		pci_print_config_common(&config);
+		pci_print_config_addr(addr, &config);
 
 		if (config.header_type.multiple_func)
 			pci_bus_enum_dev_func(addr, &config);

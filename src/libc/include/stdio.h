@@ -2,6 +2,7 @@
 #define _STDIO_H_
 
 int printf(const char *fmt, ...);
+int sprintf(char *buf, const char *fmt, ...);
 void puts(const char *s);
 
 #define print64(x) \
