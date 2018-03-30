@@ -99,6 +99,13 @@ struct pci_config_common {
 	struct pci_bist_reg	bist;
 } __packed;
 
+struct pci_dev_descr {
+	u8		class;
+	u8		sub_class;
+	u8		prog_if;
+	const char 	*descr;
+};
+
 static inline u32 pci_read_config_dword(const struct pci_addr addr)
 {
 	outl(PCI_CONFIG_ADDRESS, addr.dword);
@@ -115,43 +122,138 @@ static void pci_read_config_common(struct pci_addr addr,
 	}
 }
 
-#define PCI_NR_CLASS 0x12
-static const char *__pci_dev_class_str[PCI_NR_CLASS] = {
-	"Class not supported",
-	"Mass storage controller",
-	"Network controller",
-	"Display controller",
-	"Multimedia controller",
-	"Memory controller",
-	"Bridge device",
-	"Simple communication controllers",
-	"Base System Peripherals",
-	"Input Devices",
-	"Docking stations",
-	"Processors",
-	"Serial bus controller",
-	"Wireless controller",
-	"Intelligent I/O controller",
-	"Satellite Communication controller",
-	"Encryption/Decryption controller",
-	"Data acquisition and signal processing controller",
+#define ANY_IF 0xff
+static struct pci_dev_descr __pci_dev_descrs[] = {
+#define PCI_DESCR(Class, Sub, IF, Descr) { Class, Sub, IF, Descr }
+	PCI_DESCR(0x00, 0x00, 0x00, 	"Any device except VGA-compatibles"),
+	PCI_DESCR(0x00, 0x01, 0x00, 	"VGA-Compatible Device"),
+
+	/* Mass Storage Controllers */
+	PCI_DESCR(0x01, 0x00, 0x00, 	"SCSI Bus Controller"),
+	PCI_DESCR(0x01, 0x01, ANY_IF,	"IDE Controller"),
+	PCI_DESCR(0x01, 0x02, 0x00,	"Floppy Disk Controller"),
+	PCI_DESCR(0x01, 0x03, 0x00,	"IPI Bus controller"),
+	PCI_DESCR(0x01, 0x04, 0x00,	"RAID Controller"),
+	PCI_DESCR(0x01, 0x05, 0x20,	"ATA Controller (Single DMA)"),
+	PCI_DESCR(0x01, 0x05, 0x30,	"ATA Controller (Chained DMA)"),
+	PCI_DESCR(0x01, 0x06, 0x00,	"SATA Controller"),
+	PCI_DESCR(0x01, 0x06, 0x01,	"SATA Controller (AHCI 1.0 Mode)"),
+	PCI_DESCR(0x01, 0x07, 0x00,	"Serial Attached SCSI"),
+	PCI_DESCR(0x01, 0x80, ANY_IF,	"Other Mass Storage Controller"),
+
+	/* Network controllers */
+	PCI_DESCR(0x02, 0x00, 0x00,	"Ethernet Controller"),
+	PCI_DESCR(0x02, 0x01, 0x00,	"Token Ring Controller"),
+	PCI_DESCR(0x02, 0x02, 0x00,	"FDDI Controller"),
+	PCI_DESCR(0x02, 0x03, 0x00,	"ATM Controller"),
+	PCI_DESCR(0x02, 0x04, 0x00,	"ISDN Controller"),
+	PCI_DESCR(0x02, 0x05, 0x00,	"WorldFip Controller"),
+	PCI_DESCR(0x02, 0x06, ANY_IF,	"PICMG 2.14 Multi Computing"),
+	PCI_DESCR(0x02, 0x80, ANY_IF,	"Other Network Controller"),
+
+	/* Display Controllers */
+	PCI_DESCR(0x03, 0x00, 0x00,	"VGA-Compatible Controller"),
+	PCI_DESCR(0x03, 0x00, 0x01,	"8512-Compatible Controller"),
+	PCI_DESCR(0x03, 0x01, 0x00,	"XGA Controller"),
+	PCI_DESCR(0x03, 0x02, 0x00,	"3D Controller (Not VGA-Compatible"),
+	PCI_DESCR(0x03, 0x80, ANY_IF,	"Other Display Controller"),
+
+	/* Multimedia Controller */
+	PCI_DESCR(0x04, 0x00, 0x00,	"Video Device"),
+	PCI_DESCR(0x04, 0x01, 0x00,	"Audio Device"),
+	PCI_DESCR(0x04, 0x02, 0x00,	"Computer Telephony Device"),
+	PCI_DESCR(0x04, 0x80, ANY_IF,	"Other Multimedia Device"),
+
+	/* Memory Controllers */
+	PCI_DESCR(0x05, 0x00, 0x00,	"RAM Controller"),
+	PCI_DESCR(0x05, 0x01, 0x00,	"Flash Controller"),
+	PCI_DESCR(0x05, 0x80, 0x00,	"Other Memory Controller"),
+
+	/* Bridge Devices */
+	PCI_DESCR(0x06, 0x00, 0x00,	"Host Bridge"),
+	PCI_DESCR(0x06, 0x01, 0x00,	"ISA Bridge"),
+	PCI_DESCR(0x06, 0x02, 0x00,	"EISA Bridge"),
+	PCI_DESCR(0x06, 0x03, 0x00,	"MCA Bridge"),
+	PCI_DESCR(0x06, 0x04, 0x00,	"PCI-to-PCI Bridge"),
+	PCI_DESCR(0x06, 0x04, 0x01,	"PCI-to-PCI Bridge (Substractive Decode)"),
+	PCI_DESCR(0x06, 0x05, 0x00,	"PCMCIA Bridge"),
+	PCI_DESCR(0x06, 0x06, 0x00,	"NuBus Bridge"),
+	PCI_DESCR(0x06, 0x07, 0x00,	"CardBus Bridge"),
+	PCI_DESCR(0x06, 0x08, ANY_IF,	"RACEway Bridge"),
+	PCI_DESCR(0x06, 0x09, 0x40,	"PCI-to-PCI Bridge (Semi-Transparent, Primary"),
+	PCI_DESCR(0x06, 0x09, 0x41,	"PCI-to-PCI Bridge (Semi-Transparent, Secondary"),
+	PCI_DESCR(0x06, 0x0a, 0x00,	"InfiniBrand-to-PCI Host Bridge"),
+	PCI_DESCR(0x06, 0x80, ANY_IF,	"Other Bridge Device"),
+
+	/* Communication Device */
+	PCI_DESCR(0x07, 0x00, 0x00,	"Generic XT-Compatible Serial Controller"),
+	PCI_DESCR(0x07, 0x00, 0x01,	"16450-Compatible Serial Controller"),
+	PCI_DESCR(0x07, 0x00, 0x02,	"16550-Compatible Serial Controller"),
+	PCI_DESCR(0x07, 0x00, 0x03,	"16650-Compatible Serial Controller"),
+	PCI_DESCR(0x07, 0x00, 0x04,	"16750-Compatible Serial Controller"),
+	PCI_DESCR(0x07, 0x00, 0x05,	"16850-Compatible Serial Controller"),
+	PCI_DESCR(0x07, 0x00, 0x06,	"16950-Compatible Serial Controller"),
+	PCI_DESCR(0x07, 0x01, 0x00,	"Parallel Port"),
+	PCI_DESCR(0x07, 0x01, 0x01,	"Bi-Directional Parallel Port"),
+	PCI_DESCR(0x07, 0x01, 0x02,	"ECP 1.X Compliant Parallel Port"),
+	PCI_DESCR(0x07, 0x01, 0x03,	"IEEE 1284 Controller"),
+	PCI_DESCR(0x07, 0x01, 0xfe,	"IEEE 1284 Target Device"),
+	PCI_DESCR(0x07,	0x02, 0x00,	"Multiport Serial Controller"),
+	PCI_DESCR(0x07, 0x03, 0x00,	"Generic Modem"),
+	PCI_DESCR(0x07, 0x03, 0x00,	"Hayes Compatible Modem (16450 compat)"),
+	PCI_DESCR(0x07, 0x03, 0x01,	"Hayes Compatible Modem (16550 compat)"),
+	PCI_DESCR(0x07, 0x03, 0x02,	"Hayes Compatible Modem (16650 compat)"),
+	PCI_DESCR(0x07, 0x03, 0x03,	"Hayes Compatible Modem (16750 compat)"),
+	PCI_DESCR(0x07, 0x04, 0x00,	"IEEE 488.1/2 (GPIB) Controller"),
+	PCI_DESCR(0x07, 0x05, 0x00,	"Smart Card"),
+	PCI_DESCR(0x07, 0x80, 0x00,	"Other Communication Device"),
+
+	/* Base System Peripherals */
+	PCI_DESCR(0x08, 0x00, 0x00,	"Generic 8259 PIC"),
+	PCI_DESCR(0x08, 0x00, 0x01,	"ISA PIC"),
+	PCI_DESCR(0x08, 0x00, 0x02,	"EISA PIC"),
+	PCI_DESCR(0x08, 0x00, 0x10,	"I/O APIC"),
+	PCI_DESCR(0x08, 0x00, 0x20,	"I/O(x) APIC"),
+	PCI_DESCR(0x08, 0x01, 0x00,	"Generic 8237 DMA Controller"),
+	PCI_DESCR(0x08, 0x01, 0x01,	"ISA DMA Controller"),
+	PCI_DESCR(0x08, 0x01, 0x02,	"EISA DMA Controller"),
+	PCI_DESCR(0x08, 0x02, 0x00,	"Generic 8254 System Timer"),
+	PCI_DESCR(0x08, 0x02, 0x01,	"ISA System Timer"),
+	PCI_DESCR(0x08, 0x02, 0x02,	"EISA System Timer"),
+	PCI_DESCR(0x08, 0x03, 0x00,	"Generic RTC Controller"),
+	PCI_DESCR(0x08, 0x03, 0x01,	"ISA RTC Controller"),
+	PCI_DESCR(0x08, 0x04, 0x00,	"Generic PCI Hot-Plug Controller"),
+	PCI_DESCR(0x08, 0x80, ANY_IF,	"Other System Peripheral"),
+
+	/* Input Controllers */
+	/* TODO missing descriptions */
+
+#undef PCI_DESCR
 };
 
-static inline const char *pci_dev_class_str(const u8 class)
+static inline int pci_descr_match(struct pci_config_common *c,
+				  struct pci_dev_descr *d)
 {
-	if (class < PCI_NR_CLASS)
-		return __pci_dev_class_str[class];
-	else if (class != 0xff)
-		return "Reserved";
-	else
-		return "Not defined";
+	return c->class == d->class && c->sub_class == d->sub_class
+		&& (c->prog_if == d->prog_if || d->prog_if == ANY_IF);
+}
+
+static inline const char *pci_dev_descr(struct pci_config_common *c)
+{
+	for (u16 i = 0; i < array_size(__pci_dev_descrs); ++i) {
+		struct pci_dev_descr *d = &__pci_dev_descrs[i];
+		if (pci_descr_match(c, d))
+			return d->descr;
+	}
+	return NULL;
 }
 
 static void pci_print_config_common(struct pci_config_common *config)
 {
-	printf("VendorID: 0x%x\tDeviceID: 0x%x\tClass: %s (0x%x)\n",
+	const char *desc = pci_dev_descr(config);
+	printf("VendorID: 0x%x\tDeviceID: 0x%x\tDevice: %s\n",
 			config->vendor_id, config->device_id,
-			pci_dev_class_str(config->class), config->class);
+			desc == NULL ? "Unknown" : desc);
 }
 
 static void pci_print_config_addr(struct pci_addr addr,
