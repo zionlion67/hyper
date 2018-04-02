@@ -80,16 +80,23 @@ void hyper_main(u32 magic, u32 info_addr)
 				MULTIBOOT_TAG_TYPE_MMAP);
 	if (!mmap)
 		goto halt;
+
 	init_idt();
 	load_tss();
+
 	memory_init(mmap);
 	init_kmalloc();
-	init_pci();
+
+	pci_register_drivers();
+	struct pci_bus pci_bus = {
+		.num = 0
+	};
+	init_pci_bus(&pci_bus);
+
 	if (has_vmx_support())
 		printf("VMX supported !\n");
 	struct vmm vmm;
 	vmm_init(&vmm);
-	asm volatile ("int $0");
 
 halt:
 	for (;;)

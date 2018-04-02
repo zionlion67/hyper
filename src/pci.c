@@ -1,6 +1,9 @@
 #include <io.h>
 #include <stdio.h>
+#include <string.h>
 #include <compiler.h>
+#include <kmalloc.h>
+#include <pci.h>
 
 #define PCI_CONFIG_ADDRESS	0xCF8
 #define PCI_CONFIG_DATA 	0xCFC
@@ -8,8 +11,7 @@
 struct pci_addr {
 	union {
 		struct {
-			u32	zero : 2;
-			u32	reg : 6;
+			u8	reg; /* MUST BE ALIGNED ON 4 !!! */
 			u32	func : 3;
 			u32	dev : 5;
 			u32	bus : 8;
@@ -20,84 +22,6 @@ struct pci_addr {
 	};
 } __packed;
 
-struct pci_command_reg {
-	union {
-		struct {
-			u16	io_space : 1;
-			u16	mem_space : 1;
-			u16	bus_master : 1;
-			u16	special_cycles : 1;
-			u16	write_inv_enable : 1;
-			u16	vga_snoop : 1;
-			u16	parity_err : 1;
-			u16	reserved1 : 1;
-			u16	serr_enable : 1;
-			u16	fbtb_enable : 1;
-			u16	disable_irq : 1;
-			u16	reserved2 : 5;
-		};
-		u16	word;
-	};
-} __packed;
-
-struct pci_status_reg {
-	union {
-		struct {
-			u16	reserved1 : 3;
-			u16	irq_status : 1;
-			u16	cap_list : 1;
-			u16	_66_mhz_cap : 1;
-			u16	reserved2 : 1;
-			u16	fbtb_cap : 1;
-			u16	master_data_parity_err : 1;
-			u16	devsel_timing : 2;
-			u16	sig_target_abort : 1;
-			u16	rx_target_abort : 1;
-			u16	rx_master_abort : 1;
-			u16	sig_sys_err : 1;
-			u16	parity_err : 1;
-		};
-		u16	word;
-	};
-} __packed;
-
-struct pci_header_type {
-	union {
-		struct {
-			u8	type : 7;
-			u8	multiple_func : 1;
-		};
-		u8	byte;
-	};
-} __packed;
-
-/* bist = Built-in Self Reset */
-struct pci_bist_reg {
-	union {
-		struct {
-			u8	comp_code : 4;
-			u8	reserved : 2;
-			u8	start_bist : 1;
-			u8	bist_cap : 1;
-		};
-		u8	byte;
-	};
-} __packed;
-
-struct pci_config_common {
-	u16			vendor_id;
-	u16			device_id;
-	struct pci_command_reg 	command;
-	struct pci_status_reg	status;
-	u8			rev_id;
-	u8			prog_if;
-	u8			sub_class;
-	u8			class;
-	u8			cacheline_sz;
-	u8			latency_timer;
-	struct pci_header_type	header_type;
-	struct pci_bist_reg	bist;
-} __packed;
 
 struct pci_dev_descr {
 	u8		class;
@@ -106,7 +30,9 @@ struct pci_dev_descr {
 	const char 	*descr;
 };
 
-static inline u32 pci_read_config_dword(const struct pci_addr addr)
+static DECLARE_LIST(pci_drivers);
+
+static inline u32 pci_inl(const struct pci_addr addr)
 {
 	outl(PCI_CONFIG_ADDRESS, addr.dword);
 	return inl(PCI_CONFIG_DATA);
@@ -115,10 +41,10 @@ static inline u32 pci_read_config_dword(const struct pci_addr addr)
 static void pci_read_config_common(struct pci_addr addr,
 				   struct pci_config_common *config)
 {
-	for (u16 i = 0; i < sizeof(struct pci_config_common) / sizeof(u32); i++) {
+	for (u16 i = 0; i < sizeof(struct pci_config_common); i += sizeof(u32)) {
 		addr.reg = i;
-		u32 *tmp = (u8 *)config + i * sizeof(u32);
-		*tmp = pci_read_config_dword(addr);
+		u32 *tmp = (u8 *)config + i;
+		*tmp = pci_inl(addr);
 	}
 }
 
@@ -238,12 +164,12 @@ static inline int pci_descr_match(struct pci_config_common *c,
 		&& (c->prog_if == d->prog_if || d->prog_if == ANY_IF);
 }
 
-static inline const char *pci_dev_descr(struct pci_config_common *c)
+static const char *pci_dev_descr(struct pci_config_common *config)
 {
 	for (u16 i = 0; i < array_size(__pci_dev_descrs); ++i) {
-		struct pci_dev_descr *d = &__pci_dev_descrs[i];
-		if (pci_descr_match(c, d))
-			return d->descr;
+		struct pci_dev_descr *descr = &__pci_dev_descrs[i];
+		if (pci_descr_match(config, descr))
+			return descr->descr;
 	}
 	return NULL;
 }
@@ -263,47 +189,116 @@ static void pci_print_config_addr(struct pci_addr addr,
 	pci_print_config_common(config);
 }
 
-
-#define PCI_INVALID_VENDOR_ID 0xffff
-static void pci_bus_enum_dev_func(struct pci_addr addr,
-				  struct pci_config_common *config)
+static inline u32 pci_read_reg(struct pci_addr addr, u8 reg)
 {
-	for (u8 f = 1; f < 8; ++f) {
-		addr.func = f;
-		pci_read_config_common(addr, config);
-		if (config->vendor_id != PCI_INVALID_VENDOR_ID)
-			pci_print_config_addr(addr, config);
-	}
+	addr.reg = reg;
+	return pci_inl(addr);
 }
 
+#define PCI_CIS_PTR_REG 	0x28
+#define PCI_SUBSYSTEM_REG	0x2c
+#define PCI_EROM_REG		0x30
+#define PCI_CAP_PTR_REG		0x34
+#define PCI_INTR_REG		0x3c
+static void pci_read_dev_config(struct pci_dev *pci_dev, struct pci_addr addr)
+{
+	/* Already read */
+	u16 off = sizeof(struct pci_config_common);
+	for (u16 i = 0; i < PCI_NR_BARS; ++i) {
+		addr.reg = off + i;
+		pci_dev->bars[i] = pci_inl(addr);
+	}
 
-/* TODO add multiple functions support + real actions */
-static void pci_bus_enum_devices(u8 bus) {
+	pci_dev->cis_ptr = pci_read_reg(addr, PCI_CIS_PTR_REG);
+
+	u32 tmp = pci_read_reg(addr, PCI_SUBSYSTEM_REG);
+	pci_dev->subvendor_id = tmp & 0xffff;
+	pci_dev->subsystem_id = tmp >> 16;
+
+	pci_dev->rom_addr = pci_read_reg(addr, PCI_EROM_REG);
+	pci_dev->cap_ptr = pci_read_reg(addr, PCI_CAP_PTR_REG) & 0xff;
+
+	tmp = pci_read_reg(addr, PCI_INTR_REG);
+	*(u32 *)&pci_dev->intr_line = tmp;
+}
+
+#define PCI_INVALID_VENDOR_ID 0xffff
+static int pci_bus_enum_dev_func(struct pci_bus *pci_bus, struct pci_addr addr,
+				 struct pci_config_common *config)
+{
+	pci_read_config_common(addr, config);
+	if (config->vendor_id == PCI_INVALID_VENDOR_ID)
+		return 0;
+
+	pci_print_config_addr(addr, config);
+
+	struct pci_dev *pci_dev = kmalloc(sizeof(struct pci_dev));
+	if (pci_dev == NULL)
+		return 1;
+
+	pci_dev->dev.desc = pci_dev_descr(config);
+	pci_dev->dev.bus = &pci_bus->bus;
+
+	memcpy(&pci_dev->common, config, sizeof(struct pci_config_common));
+	pci_read_dev_config(pci_dev, addr);
+
+	list_add(&pci_bus->bus.devices, &pci_dev->next);
+
+	struct pci_device_id id = {
+		PCI_DEVICE(config->vendor_id, config->device_id),
+	};
+
+	struct pci_driver *pci_drv = pci_find_driver(&id);
+	if (pci_drv == NULL) {
+		pci_dev->dev.drv = NULL;
+	} else {
+		if (pci_driver_probe(pci_drv, pci_dev))
+			pci_dev->dev.drv = &pci_drv->drv;
+	}
+
+	return 0;
+}
+
+#define PCI_NR_FUNC 8
+static int pci_bus_enum_device(struct pci_bus *bus, struct pci_addr addr)
+{
+	for (u8 func = 0; func < PCI_NR_FUNC; ++func) {
+		addr.func = func;
+		struct pci_config_common config;
+		if (pci_bus_enum_dev_func(bus, addr, &config))
+			return 1;
+		if (!config.header_type.multiple_func)
+			break;
+	}
+
+	return 0;
+}
+
+#define PCI_NR_DEVICE 32
+static int pci_bus_enum_devices(struct bus *bus)
+{
+	struct pci_bus *pci_bus = to_pci_bus(bus);
 
 	struct pci_addr addr = {
-		.bus = bus,
+		.bus = pci_bus->num,
 		.enable = 1,
 	};
 
-	for (u16 i = 0; i < 32; ++i) {
+	for (u16 i = 0; i < PCI_NR_DEVICE; ++i) {
 		addr.dev = i;
-		struct pci_config_common config;
-		pci_read_config_common(addr, &config);
-
-		if (config.vendor_id == PCI_INVALID_VENDOR_ID)
-			continue;
-
-		pci_print_config_addr(addr, &config);
-
-		if (config.header_type.multiple_func)
-			pci_bus_enum_dev_func(addr, &config);
+		if (pci_bus_enum_device(pci_bus, addr))
+			return 1;
 	}
+
 	printf("\n");
+	return 0;
 }
 
-int init_pci(void)
+static const struct bus_ops pci_bus_ops = {
+	.discover = pci_bus_enum_devices,
+};
+
+int init_pci_bus(struct pci_bus *pci_bus)
 {
-	printf("PCI devices:\n");
-	pci_bus_enum_devices(0);
-	return 0;
+	return bus_init(&pci_bus->bus, "PCI Bus", &pci_bus_ops);
 }

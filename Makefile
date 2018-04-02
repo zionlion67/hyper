@@ -3,6 +3,12 @@ KERNEL = $(OUT_DIR)/kernel
 GRUB_CFG = grub_default.cfg
 ISO = hyper.iso
 
+QEMU=/usr/bin/qemu-system-x86_64
+QEMU_OPTS= -drive id=disk,file=$(ISO),if=none \
+	     -device ahci,id=ahci		\
+	     -device ide-drive,drive=disk,bus=ahci.0 \
+	     -serial stdio -m 4G
+
 INCLUDE_DIR = include/
 OBJS = src/boot.o 	\
        src/main.o	\
@@ -17,7 +23,8 @@ OBJS = src/boot.o 	\
        src/vmx_guest_test.o \
        src/vm_exit.o	\
        src/vmx_debug.o	\
-       src/pci.o
+       src/pci.o	\
+       src/pci_driver.o
 
 LIBC_DIR=src/libc
 LIBC_OBJS=$(LIBC_DIR)/printf.o \
@@ -26,6 +33,9 @@ LIBC_OBJS=$(LIBC_DIR)/printf.o \
 	  $(LIBC_DIR)/puts.o	\
 	  $(LIBC_DIR)/memset.o  \
 	  $(LIBC_DIR)/memcpy.o
+
+DRIVER_DIR=src/drivers
+DRIVER_OBJS=$(DRIVER_DIR)/ahci.o
 
 CC=gcc
 CPPFLAGS += -I$(INCLUDE_DIR) -I$(LIBC_DIR)/include #-DDEBUG
@@ -38,18 +48,16 @@ ASFLAGS += -g3
 LDFLAGS = -n -T $(LDSCRIPT) -nostdlib -static
 LDSCRIPT = src/hyper.lds
 
-.PHONY: all clean run iso
+.PHONY: all clean run
 
 all: $(ISO)
 
-iso: $(ISO)
-
 run: $(ISO)
-	qemu-system-x86_64 -cdrom $(ISO) -cpu host -enable-kvm -serial stdio -m 4G
+	$(QEMU) $(QEMU_OPTS) -cpu host -enable-kvm
 
 debug: CFLAGS+= -DDEBUG
 debug: $(ISO)
-	qemu-system-x86_64 -cdrom $(ISO) -serial stdio -s -S
+	$(QEMU) $(QEMU_OPTS) -s -S
 
 $(ISO): $(OUT_DIR) $(KERNEL)
 	mkdir -p $(OUT_DIR)/iso/boot/grub
@@ -57,7 +65,7 @@ $(ISO): $(OUT_DIR) $(KERNEL)
 	cp $(GRUB_CFG) $(OUT_DIR)/iso/boot/grub/grub.cfg
 	grub-mkrescue -o $(ISO) $(OUT_DIR)/iso
 
-$(KERNEL): $(OBJS) $(LIBC_OBJS)
+$(KERNEL): $(OBJS) $(LIBC_OBJS) $(DRIVER_OBJS)
 	$(LD) $(LDFLAGS) -o $@ $?
 
 $(OUT_DIR):
@@ -66,5 +74,6 @@ clean:
 	$(RM) -r $(OUT_DIR)
 	$(RM) $(OBJS)
 	$(RM) $(LIBC_OBJS)
+	$(RM) $(DRIVER_OBJS)
 	$(RM) $(ISO)
 
