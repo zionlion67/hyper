@@ -9,10 +9,13 @@ static struct pci_device_id ahci_pci_id = {
 	PCI_DEVICE(VENDOR_ID, DEVICE_ID),
 };
 
-static int ahci_probe(struct pci_dev *dev)
+#define PCI_ABAR 0x6
+static int ahci_probe(struct device *dev)
 {
-	(void)dev;
+	struct pci_dev *pci_dev = to_pci_dev(dev);
 	printf("AHCI driver called\n");
+	for (u8 i = 0; i < PCI_NR_BARS; ++i)
+		printf("BAR %u: 0x%x\n", i, pci_dev->bars[i]);
 	return 0;
 }
 

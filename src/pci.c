@@ -205,7 +205,7 @@ static void pci_read_dev_config(struct pci_dev *pci_dev, struct pci_addr addr)
 	/* Already read */
 	u16 off = sizeof(struct pci_config_common);
 	for (u16 i = 0; i < PCI_NR_BARS; ++i) {
-		addr.reg = off + i;
+		addr.reg = off + i * sizeof(u32);
 		pci_dev->bars[i] = pci_inl(addr);
 	}
 

@@ -154,7 +154,7 @@ struct pci_driver {
 static inline int pci_driver_probe(struct pci_driver *pci_drv,
 				   struct pci_dev *pci_dev)
 {
-	return pci_drv->drv.ops->probe(&pci_dev->dev);	
+	return pci_drv->drv.ops->probe(&pci_dev->dev);
 }
 
 int init_pci_bus(struct pci_bus *);
