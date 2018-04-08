@@ -6,6 +6,7 @@
 #include <multiboot2.h>
 #include <page.h>
 #include <pci.h>
+#include <panic.h>
 #include <memory.h>
 #include <kmalloc.h>
 #include <vmx.h>
@@ -25,21 +26,33 @@ static int multiboot2_valid(u32 magic, u32 info_addr)
 	return 1;
 }
 
+static inline struct multiboot_tag *multiboot_tag_start(vaddr_t info_addr)
+{
+	return (struct multiboot_tag *)(info_addr + 8);
+}
+
+static inline struct multiboot_tag *multiboot_tag_next(struct multiboot_tag *tag)
+{
+	u32 size = __align_n(tag->size, MULTIBOOT_INFO_ALIGN);
+	return (struct multiboot_tag *)((u8 *)tag + size);
+}
+
+static inline int multiboot_tag_end(struct multiboot_tag *tag)
+{
+	return tag->type == MULTIBOOT_TAG_TYPE_END;
+}
+
 static void *get_multiboot_infos(vaddr_t info_addr, u8 tag_type)
 {
-	struct multiboot_tag *tag = (struct multiboot_tag *)(info_addr + 8);
-
-	while (tag->type != MULTIBOOT_TAG_TYPE_END) {
+	struct multiboot_tag *tag = multiboot_tag_start(info_addr);
+	for (; !multiboot_tag_end(tag); tag = multiboot_tag_next(tag))
 		if (tag->type == tag_type)
 			return tag;
-		u32 size = __align_n(tag->size, MULTIBOOT_INFO_ALIGN);
-		tag = (void *)((u8 *)tag + size);
-	}
 
 	return NULL;
 }
 
-#if 0
+#ifdef DEBUG
 static const char *multiboot_mmap_entry_types[] = {
 	[1] = "AVAILABLE",
 	[2] = "RESERVED",
@@ -64,22 +77,51 @@ static void dump_memory_map(struct multiboot_tag_mmap *mmap)
 }
 #endif
 
+static struct multiboot_tag_module *multiboot_get_module(vaddr_t info_addr,
+							 const char *name)
+{
+	struct multiboot_tag *tag = multiboot_tag_start(info_addr);
+	for (; !multiboot_tag_end(tag); tag = multiboot_tag_next(tag)) {
+		if (tag->type == MULTIBOOT_TAG_TYPE_MODULE) {
+			struct multiboot_tag_module *mod = (void *)tag;
+			if (strstr(mod->cmdline, name))
+				return mod;
+		}
+	}
+	return NULL;
+}
+
+static inline
+struct multiboot_tag_module *multiboot_get_linux_module(vaddr_t info_addr)
+{
+	return multiboot_get_module(info_addr, "linux");
+}
+
 void hyper_main(u32 magic, u32 info_addr)
 {
 	if (!multiboot2_valid(magic, info_addr))
-		return;
+		panic("Invalid multiboot informations\n");
 
 	vaddr_t mbi_addr = phys_to_virt(info_addr);
-#if 0
+	struct multiboot_tag_mmap *mmap = get_multiboot_infos(mbi_addr,
+				MULTIBOOT_TAG_TYPE_MMAP);
+	if (!mmap)
+		panic("Unable to retrieve multiboot memory map\n");
+
+	struct multiboot_tag_module *mod = multiboot_get_linux_module(mbi_addr);
+	(void)mod;
+
+#ifdef DEBUG
 	struct multiboot_tag_string *c = get_multiboot_infos(mbi_addr,
 				  MULTIBOOT_TAG_TYPE_CMDLINE);
 	if (c)
 		printf("Commandline: %s\n", c->string);
+	dump_memory_map(mmap);
+	if (mod) {
+		printf("Found linux module\n");
+		printf("Start: 0x%x End: 0x%x\n", mod->mod_start, mod->mod_end);
+	}
 #endif
-	struct multiboot_tag_mmap *mmap = get_multiboot_infos(mbi_addr,
-				MULTIBOOT_TAG_TYPE_MMAP);
-	if (!mmap)
-		goto halt;
 
 	init_idt();
 	load_tss();
@@ -97,8 +139,4 @@ void hyper_main(u32 magic, u32 info_addr)
 		printf("VMX supported !\n");
 	struct vmm vmm;
 	vmm_init(&vmm);
-
-halt:
-	for (;;)
-		asm volatile ("hlt");
 }

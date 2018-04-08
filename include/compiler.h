@@ -13,8 +13,10 @@
 
 #define NULL ((void *)0)
 
+#ifndef offsetof
 #define offsetof(type, field) \
 	((unsigned long)(&((type *)0)->field))
+#endif
 
 #define container_of(addr, type, field) \
 	((type *)((char *)addr - offsetof(type, field)))
