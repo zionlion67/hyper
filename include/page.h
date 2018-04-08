@@ -25,7 +25,7 @@ struct page_frame {
 paddr_t page_to_phys(struct page_frame *frame);
 struct page_frame *phys_to_page(paddr_t addr);
 struct page_frame *pfn_to_page(u64 pfn);
-int memory_init(struct multiboot_tag_mmap *mmap);
+int memory_init(struct multiboot_tag_mmap *mmap, vaddr_t first_frame_addr);
 
 struct page_frame *alloc_page_frames(vaddr_t vaddr, u64 n);
 void release_page_frames(struct page_frame *p, u64 n);

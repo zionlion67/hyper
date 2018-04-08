@@ -141,12 +141,18 @@ void release_page_frames(struct page_frame *f, u64 n)
 	}
 }
 
+static inline void init_pmd_flat(pmd_t *pmd)
+{
+	*pmd = (*(pmd - 1) + _2M_PAGE_SIZE) & ~(PG_ACCESSED|PG_DIRTY);
+}
 
 /* Build page frame array and init free frames list */
-int memory_init(struct multiboot_tag_mmap *mmap)
+/* TODO rewrite all this shit */
+int memory_init(struct multiboot_tag_mmap *mmap, vaddr_t first_frame_addr)
 {
 	init_memory_map(mmap);
 
+	/* Physically valid addresses */
 	paddr_t first_paddr = first_valid_paddr();
 	paddr_t last_paddr = last_valid_paddr();
 	first_frame_paddr = first_paddr;
@@ -154,32 +160,31 @@ int memory_init(struct multiboot_tag_mmap *mmap)
 	/* number of 4K frames */
 	u64 frame_count = (last_paddr - first_paddr) / PAGE_SIZE;
 
-	/* the frame array is located just after the kernel */
-	first_frame = (void *)_end;
+	/* the frame array is located just after the last multiboot module  */
+	first_frame = (void *)first_frame_addr;
 	last_frame = first_frame + frame_count;
 
 	pmd_t *pmd = kernel_pmd();
+
 	u64 cnt;
-	for (cnt = 0; cnt < PTRS_PER_TABLE - 1; ++cnt) {
+	u16 first_frame_off = pmd_offset(first_frame_addr);
+	/* Map all up to first frame pmd offset */
+	for (cnt = 1; cnt < PTRS_PER_TABLE - 1 && cnt + 1 < first_frame_off; ++cnt) {
 		if (!pg_present(pmd[cnt + 1]))
-			break;
-		continue;
+			init_pmd_flat(pmd + cnt + 1);
 	}
 
+	/* Last address currently mapped + 1 */
 	paddr_t end = (pmd[cnt] & PAGE_MASK) + _2M_PAGE_SIZE;
 	u64 last_frame_off = pmd_offset((vaddr_t)last_frame);
-	if (cnt > last_frame_off)
-		last_frame_off = cnt + 1;
+	/* Virtual addresses below this will not be allocatable */
 	paddr_t reserved_end = end + (last_frame_off - cnt) * _2M_PAGE_SIZE;
 
 	cnt = 0;
 	for (struct page_frame *f = first_frame; f < last_frame; ++f) {
-		/* check if frame is on two different page */
 		u64 pmd_off = pmd_offset((vaddr_t)f + sizeof(struct page_frame));
-		if (!pg_present(pmd[pmd_off])) {
-			pmd_t new = pmd[pmd_off - 1] + _2M_PAGE_SIZE;
-			pmd[pmd_off] = new & ~(PG_ACCESSED|PG_DIRTY);
-		}
+		if (!pg_present(pmd[pmd_off]))
+			init_pmd_flat(pmd + pmd_off);
 
 		const paddr_t paddr = page_to_phys(f);
 		list_init(&f->free_list);

@@ -109,7 +109,6 @@ void hyper_main(u32 magic, u32 info_addr)
 		panic("Unable to retrieve multiboot memory map\n");
 
 	struct multiboot_tag_module *mod = multiboot_get_linux_module(mbi_addr);
-	(void)mod;
 
 #ifdef DEBUG
 	struct multiboot_tag_string *c = get_multiboot_infos(mbi_addr,
@@ -126,7 +125,7 @@ void hyper_main(u32 magic, u32 info_addr)
 	init_idt();
 	load_tss();
 
-	memory_init(mmap);
+	memory_init(mmap, phys_to_virt(mod->mod_end));
 	init_kmalloc();
 
 	pci_register_drivers();
