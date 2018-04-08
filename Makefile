@@ -60,10 +60,7 @@ debug: $(ISO)
 	$(QEMU) $(QEMU_OPTS) -s -S
 
 $(ISO): $(OUT_DIR) $(KERNEL)
-	mkdir -p $(OUT_DIR)/iso/boot/grub
-	cp $(KERNEL) $(OUT_DIR)/iso/boot/kernel
-	cp $(GRUB_CFG) $(OUT_DIR)/iso/boot/grub/grub.cfg
-	grub-mkrescue -o $(ISO) $(OUT_DIR)/iso
+	./tools/create_iso.sh $(realpath $(OUT_DIR)) $(ISO)
 
 $(KERNEL): $(OBJS) $(LIBC_OBJS) $(DRIVER_OBJS)
 	$(LD) $(LDFLAGS) -o $@ $?
