@@ -294,6 +294,11 @@ struct vmcs_guest_state {
 	u64	pdpte[4];
 };
 
+struct vaddr_range {
+	vaddr_t start;
+	vaddr_t end;
+};
+
 struct vmcs;
 struct vmm {
 	u64 vmx_msr[NR_VMX_MSR];
@@ -301,12 +306,14 @@ struct vmm {
 	struct vmcs *vmx_on;
 	struct vmcs *vmcs;
 
-	vaddr_t guest_mem_start;
-	vaddr_t guest_mem_end;
+	struct vaddr_range guest_mem;
+	struct vaddr_range guest_image;
 
 	struct eptp eptp;
 	struct vmcs_host_state host_state;
 	struct vmcs_guest_state guest_state;
+
+	int (*setup_guest)(struct vmm *);
 };
 
 int has_vmx_support(void);

@@ -195,8 +195,8 @@ static int setup_ept(struct vmm *vmm)
 	paddr_t end = start + nb_pages * ALLOC_PAGE_SIZE;
 	if (ept_setup_range(vmm, start, end, 0))
 		return 1;
-	vmm->guest_mem_start = p;
-	vmm->guest_mem_end = phys_to_virt(end);
+	vmm->guest_mem.start = p;
+	vmm->guest_mem.end = phys_to_virt(end);
 	return 0;
 }
 
@@ -316,6 +316,7 @@ static void vmcs_write_vm_exit_controls(struct vmm *vmm)
 			   MSR_VMX_TRUE_EXIT_CTLS);
 }
 
+/* TODO check if guest is in LM or PM */
 static void vmcs_write_vm_entry_controls(struct vmm *vmm)
 {
 	vmcs_write_control(vmm, VM_ENTRY_CONTROLS, 0,
@@ -482,7 +483,7 @@ int vmm_init(struct vmm *vmm)
 		goto free_vmcs;
 	}
 
-	setup_test_guest32(vmm);
+	vmm->setup_guest(vmm);
 	init_vm_exit_handlers(vmm);
 
 	if (__vmxon(virt_to_phys(vmm->vmx_on))) {

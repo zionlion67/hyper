@@ -10,6 +10,7 @@
 #include <memory.h>
 #include <kmalloc.h>
 #include <vmx.h>
+#include <vmx_guest.h>
 
 static int multiboot2_valid(u32 magic, u32 info_addr)
 {
@@ -104,17 +105,13 @@ void hyper_main(u32 magic, u32 info_addr)
 
 	vaddr_t mbi_addr = phys_to_virt(info_addr);
 	struct multiboot_tag_mmap *mmap = get_multiboot_infos(mbi_addr,
-				MULTIBOOT_TAG_TYPE_MMAP);
+					  MULTIBOOT_TAG_TYPE_MMAP);
 	if (!mmap)
 		panic("Unable to retrieve multiboot memory map\n");
 
 	struct multiboot_tag_module *mod = multiboot_get_linux_module(mbi_addr);
 
 #ifdef DEBUG
-	struct multiboot_tag_string *c = get_multiboot_infos(mbi_addr,
-				  MULTIBOOT_TAG_TYPE_CMDLINE);
-	if (c)
-		printf("Commandline: %s\n", c->string);
 	dump_memory_map(mmap);
 	if (mod) {
 		printf("Found linux module\n");
@@ -134,8 +131,17 @@ void hyper_main(u32 magic, u32 info_addr)
 	};
 	init_pci_bus(&pci_bus);
 
-	if (has_vmx_support())
-		printf("VMX supported !\n");
-	struct vmm vmm;
+	if (!has_vmx_support())
+		panic("VMX is not supported by this CPU.\n");
+
+	struct vmm vmm = {
+		.setup_guest = setup_test_guest32,
+		.guest_image = {
+			.start = phys_to_virt(mod->mod_start),
+			.end   = phys_to_virt(mod->mod_end),
+		},
+	};
 	vmm_init(&vmm);
+
+	__builtin_unreachable();
 }
