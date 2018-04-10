@@ -448,6 +448,34 @@ static inline void vmcs_write_vm_guest_state(struct vmm *vmm)
 	vmcs_write_guest_state(&vmm->guest_state);
 }
 
+/* Hack to launch linux with correct reg state, this is really ugly. */
+static int launch_vm(struct vmm *vmm)
+{
+#if 0
+	struct vmcs_guest_register_state *state = &vmm->guest_state.reg_state;
+	asm volatile goto ("movq %3, %%rbp\n\t"
+			   "vmlaunch\n\t"
+			   "jbe %l4"
+			   : /* No output */
+			   : "S"(state->rsi), "D"(state->rdi),
+			     "r"(state->rbp), "b"(state->rbx)
+			   : "memory"
+			   : fail
+			  );
+#endif
+	asm volatile ("movq $0x6000, %rsi\n\t"
+		      "xorq %rdi, %rdi\n\t"
+		      "xorq %rbp, %rbp\n\t"
+		      "xorq %rbx, %rbx\n\t"
+		      "vmlaunch");
+	(void)vmm;
+	return 0;
+#if 0
+fail:
+	return 1;
+#endif
+}
+
 int vmm_init(struct vmm *vmm)
 {
 	vmm_read_vmx_msrs(vmm);
@@ -516,7 +544,7 @@ int vmm_init(struct vmm *vmm)
 	printf("Hello from VMX ROOT\n");
 	printf("Entering guest ...\n");
 
-	if (__vmlaunch()) {
+	if (launch_vm(vmm)) {
 		printf("VMLAUNCH failed\n");
 		goto free_vmcs;
 	}

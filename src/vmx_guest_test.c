@@ -4,6 +4,9 @@
 #include <vmx.h>
 #include <io.h>
 
+#include <linux/bootparam.h>
+#include <linux/e820.h>
+
 #define VMM_HOST_SEL(vmm, seg) (vmm->host_state.selectors.seg)
 
 static void gate_to_seg_desc64(struct gdt_desc *gdt_desc,
@@ -257,10 +260,11 @@ static void setup_x86_default_regs(struct vmm *vmm)
 	vmm->guest_state.reg_state.rflags = 0x2;
 }
 
+#define VMX_NO_VMCS_LINK ~((u64)0ULL)
 int setup_test_guest32(struct vmm *vmm)
 {
 	setup_x86_default_regs(vmm);
-	vmm->guest_state.vmcs_link = (u64)-1ULL;
+	vmm->guest_state.vmcs_link = VMX_NO_VMCS_LINK;
 
 	/* +4 is hack to skip 64 bit prologue */
 	memcpy(vmm->guest_mem.start + (1 << 20), test_code32 + 4,
@@ -269,5 +273,124 @@ int setup_test_guest32(struct vmm *vmm)
 	vmm->guest_state.reg_state.rsp = 0x400000;
 	vmm->guest_state.reg_state.rip = (1 << 20);
 
+	return 0;
+}
+
+#define SETUP_HDR_OFFSET	0x1f1
+#define SECTOR_SIZE		512
+
+#define BOOTLOADER_UNDEFINED	0xff
+#define BOOT_SECTOR_ADDR	0x6000
+#define COMMAND_LINE_ADDR	(BOOT_SECTOR_ADDR + 0x10000)
+#define LINUX_KERNEL_LOAD_ADDR	0x100000
+
+static inline void set_e820_entry(struct boot_e820_entry *entry, u64 addr,
+				  u64 size, u32 type)
+{
+	entry->addr = addr;
+	entry->size = size;
+	entry->type = type;
+}
+
+static void init_e820_table(struct boot_params *params)
+{
+	u8 idx = 0;
+	struct boot_e820_entry *pre_isa = &params->e820_table[idx++];
+	struct boot_e820_entry *post_isa = &params->e820_table[idx++];
+
+	set_e820_entry(pre_isa, 0x0, ISA_START_ADDRESS - 1, E820_RAM);
+	set_e820_entry(post_isa, ISA_END_ADDRESS, 0xffffffff - ISA_END_ADDRESS,
+		       E820_RAM);
+
+	params->e820_entries = idx;
+}
+
+static void init_linux_boot_params(struct boot_params *params)
+{
+	if (params->hdr.setup_sects == 0)
+		params->hdr.setup_sects = 4;
+
+	params->hdr.type_of_loader = BOOTLOADER_UNDEFINED;
+
+	u8 loadflags = params->hdr.loadflags;
+	loadflags |= KEEP_SEGMENTS; /* Do not reload segments */
+	loadflags &= ~QUIET_FLAG; /* Print early messages */
+	loadflags &= ~CAN_USE_HEAP; /* heap_ptr is not valid */
+	params->hdr.loadflags = loadflags;
+
+	params->hdr.cmd_line_ptr = COMMAND_LINE_ADDR;
+
+	init_e820_table(params);
+}
+
+static char *read_kernel_version(struct vmm *vmm, struct setup_header *hdr)
+{
+	char *kversion = "failed to retrieve kernel version";
+	u8 sect = (hdr->kernel_version >> 9) + 1;
+
+	char *img_start = (char *)vmm->guest_img.start;
+	if (hdr->setup_sects >= sect)
+		 kversion = img_start + hdr->kernel_version + SECTOR_SIZE;
+	return kversion;
+}
+
+static void setup_linux_cmdline(struct vmm *vmm, const char *cmdline)
+{
+	u64 cmdline_len = strlen(cmdline);
+	void *cmdline_ptr = (void *)(vmm->guest_mem.start + COMMAND_LINE_ADDR);
+	memset(cmdline_ptr, 0, cmdline_len + 1);
+	memcpy(cmdline_ptr, cmdline, cmdline_len);
+}
+
+static inline void map_linux_kernel(vaddr_t ram_start, vaddr_t img_start,
+				    vaddr_t img_end, u64 kernel_offset)
+{
+	void *kernel = (void *)(img_start + kernel_offset);
+	u64 kernel_sz = (img_end - img_start) - kernel_offset;
+	
+	memcpy((void *)(ram_start + LINUX_KERNEL_LOAD_ADDR), kernel, kernel_sz);
+}
+
+int setup_linux_guest(struct vmm *vmm)
+{
+	setup_x86_default_regs(vmm);
+
+	vaddr_t ram_start = vmm->guest_mem.start;
+	vaddr_t img_start = vmm->guest_img.start;
+	vaddr_t img_end   = vmm->guest_img.end;
+
+	struct setup_header *hdr = (void *)(img_start + SETUP_HDR_OFFSET);
+
+	printf("Linux Version: %s\n", read_kernel_version(vmm, hdr));
+
+	struct boot_params *boot_params = (void *)(ram_start + BOOT_SECTOR_ADDR);
+	memset(boot_params, 0, sizeof(struct boot_params));
+	
+	/* from Documentation/x86/boot.txt:
+	 * The end of setup header can be calculated as follow:
+	 * 	0x0202 + byte value at offset 0x0201
+	 */
+	u64 setup_hdr_end = 0x202 + ((u8 *)img_start)[0x201];
+	memcpy(&boot_params->hdr, hdr, setup_hdr_end - SETUP_HDR_OFFSET);
+	init_linux_boot_params(boot_params);
+
+	/* TODO remove hardcoded cmdline */
+	const char *cmdline = "console=ttyS0 earlyprintk=serial";
+	setup_linux_cmdline(vmm, cmdline);
+
+	u64 kernel_offset = (boot_params->hdr.setup_sects + 1) * SECTOR_SIZE;
+	map_linux_kernel(ram_start, img_start, img_end, kernel_offset);
+
+	/* TODO add initrd */
+
+	struct vmcs_guest_register_state *state = &vmm->guest_state.reg_state;
+	state->rsp = 0x400000;
+	state->rip = LINUX_KERNEL_LOAD_ADDR;
+	state->rsi = BOOT_SECTOR_ADDR;
+	state->rdi = 0;
+	state->rbp = 0;
+	state->rbx = 0;
+
+	vmm->guest_state.vmcs_link = VMX_NO_VMCS_LINK;
 	return 0;
 }

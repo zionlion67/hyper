@@ -280,6 +280,12 @@ struct vmcs_guest_register_state {
 	u64	rflags;
 	u64	rsp;
 	u64	rip;
+
+	/* TODO real reg state with everything */
+	u64	rsi;
+	u64	rdi;
+	u64	rbp;
+	u64	rbx;
 };
 
 struct vmcs_guest_state {
@@ -307,7 +313,7 @@ struct vmm {
 	struct vmcs *vmcs;
 
 	struct vaddr_range guest_mem;
-	struct vaddr_range guest_image;
+	struct vaddr_range guest_img;
 
 	struct eptp eptp;
 	struct vmcs_host_state host_state;

@@ -135,8 +135,8 @@ void hyper_main(u32 magic, u32 info_addr)
 		panic("VMX is not supported by this CPU.\n");
 
 	struct vmm vmm = {
-		.setup_guest = setup_test_guest32,
-		.guest_image = {
+		.setup_guest = setup_linux_guest,
+		.guest_img = {
 			.start = phys_to_virt(mod->mod_start),
 			.end   = phys_to_virt(mod->mod_end),
 		},

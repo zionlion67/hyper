@@ -113,6 +113,8 @@ static const char *vm_exit_reason_str[] = {
 static void default_vm_exit_handler(struct vmm *vmm __maybe_unused,
 			     struct vm_exit_code exit_code __maybe_unused)
 {
+	printf("VM EXIT\n");
+
 	u16 exit_no = exit_code.exit_reason;
 	printf("reason: %s (%u)\n", vm_exit_reason_str[exit_no], exit_no);
 
@@ -121,6 +123,9 @@ static void default_vm_exit_handler(struct vmm *vmm __maybe_unused,
 		printf("VMREAD failed\n");
 
 	printf("qual: 0x%lx\n", qual);
+
+	__vmread(GUEST_RIP, &qual);
+	printf("Guest RIP: 0x%lx\n", qual);
 	panic("");
 }
 
