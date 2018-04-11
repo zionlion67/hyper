@@ -276,16 +276,8 @@ struct vmcs_guest_register_state {
 
 	struct vmcs_state_msr msr;
 
+	struct x86_regs regs;
 	u64	dr7;
-	u64	rflags;
-	u64	rsp;
-	u64	rip;
-
-	/* TODO real reg state with everything */
-	u64	rsi;
-	u64	rdi;
-	u64	rbp;
-	u64	rbx;
 };
 
 struct vmcs_guest_state {

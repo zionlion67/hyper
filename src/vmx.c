@@ -227,7 +227,8 @@ paddr_t ept_translate(struct eptp *eptp, paddr_t addr)
 	if (!pg_present(pte[pte_off].quad_word))
 		return (paddr_t)-1;
 
-	return (paddr_t)((pte[pte_off].quad_word & PAGE_MASK) + (addr & ~PAGE_MASK));
+	u16 page_off = addr & ~PAGE_MASK;
+	return (paddr_t)((pte[pte_off].quad_word & PAGE_MASK) + page_off);
 }
 
 static void vmcs_get_host_selectors(struct segment_selectors *sel)
@@ -264,7 +265,7 @@ static void vmcs_fill_msr_state(struct vmcs_state_msr *msr)
 #endif
 }
 
-#define VM_EXIT_STACK_SIZE	(PAGE_SIZE - 16)
+#define VM_EXIT_STACK_SIZE	(PAGE_SIZE - 32)
 extern void vm_exit_stub(void);
 static int vmcs_get_host_state(struct vmcs_host_state *state)
 {
@@ -458,9 +459,9 @@ static void vmcs_write_guest_reg_state(struct vmcs_guest_register_state *state)
 	__vmwrite(GUEST_PERF_GLOBAL_CTRL, state->msr.ia32_perf_global_ctrl);
 	__vmwrite(GUEST_DR7, state->dr7);
 
-	__vmwrite(GUEST_RFLAGS, state->rflags);
-	__vmwrite(GUEST_RSP, state->rsp);
-	__vmwrite(GUEST_RIP, state->rip);
+	__vmwrite(GUEST_RFLAGS, state->regs.rflags);
+	__vmwrite(GUEST_RSP, state->regs.rsp);
+	__vmwrite(GUEST_RIP, state->regs.rip);
 
 	__vmwrite(GUEST_ACTIVITY_STATE, 0);
 	__vmwrite(GUEST_INTERRUPTIBILITY_INFO, 0);
@@ -481,29 +482,19 @@ static inline void vmcs_write_vm_guest_state(struct vmm *vmm)
 /* Hack to launch linux with correct reg state, this is really ugly. */
 static int launch_vm(struct vmm *vmm)
 {
-#if 0
 	struct vmcs_guest_register_state *state = &vmm->guest_state.reg_state;
 	asm volatile goto ("movq %3, %%rbp\n\t"
 			   "vmlaunch\n\t"
 			   "jbe %l4"
 			   : /* No output */
-			   : "S"(state->rsi), "D"(state->rdi),
-			     "r"(state->rbp), "b"(state->rbx)
+			   : "S"(state->regs.rsi), "D"(state->regs.rdi),
+			     "r"(state->regs.rbp), "b"(state->regs.rbx)
 			   : "memory"
 			   : fail
 			  );
-#endif
-	asm volatile ("movq $0x6000, %rsi\n\t"
-		      "xorq %rdi, %rdi\n\t"
-		      "xorq %rbp, %rbp\n\t"
-		      "xorq %rbx, %rbx\n\t"
-		      "vmlaunch");
-	(void)vmm;
 	return 0;
-#if 0
 fail:
 	return 1;
-#endif
 }
 
 int vmm_init(struct vmm *vmm)

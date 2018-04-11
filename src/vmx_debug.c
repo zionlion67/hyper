@@ -59,9 +59,9 @@ static void dump_guest_register_state(struct vmcs_guest_register_state *state)
 	printf("\n");
 
 	printf("DR7:\t0x%lx\n", state->dr7);
-	printf("RFLAGS:\t0x%lx\n", state->rflags);
-	printf("RSP:\t0x%lx\n", state->rsp);
-	printf("RIP:\t0x%lx\n", state->rip);
+	printf("RFLAGS:\t0x%lx\n", state->regs.rflags);
+	printf("RSP:\t0x%lx\n", state->regs.rsp);
+	printf("RIP:\t0x%lx\n", state->regs.rip);
 	printf("\n");
 
 }
@@ -212,4 +212,17 @@ const char *get_vmcs_field_str(const enum vmcs_field field)
 	}
 
 	return NULL;
+}
+
+void dump_x86_regs(struct x86_regs *regs)
+{
+#define X(x) (regs->x >> 32), (regs->x & 0xffffffff)
+	printf("RIP: 0x%x%x\tRSP: 0x%x%x\tRBP: 0x%x%x\tRFLAGS: 0x%x%x\n"
+	       "RSI: 0x%x%x\tRDI: 0x%x%x\tRAX: 0x%x%x\tRBX: 0x%x%x\n"
+	       "RCX: 0x%x%x\tRDX: 0x%x%x\tR8 : 0x%x%x\tR9 : 0x%x%x\n"
+	       "R10: 0x%x%x\tR11: 0x%x%x\tR12: 0x%x%x\tR13: 0x%x%x\n"
+	       "R14: 0x%x%x\tR15: 0x%x%x\n", X(rip), X(rsp), X(rbp), X(rflags),
+	       X(rsi), X(rdi), X(rax), X(rbx), X(rcx), X(rdx), X(r8), X(r9),
+	       X(r10), X(r11), X(r12), X(r13), X(r14), X(r15));
+#undef X
 }

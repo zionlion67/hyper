@@ -161,5 +161,70 @@ static inline u64 read_rflags(void)
 	return ret;
 }
 
+struct x86_regs {
+	u64	rip;
+	u64	rflags;
+	u64	rsp;
+	u64	rbp;
+	u64	rsi;
+	u64	rdi;
+	u64	rax;
+	u64	rbx;
+	u64	rcx;
+	u64	rdx;
+
+	u64	r8;
+	u64	r9;
+	u64	r10;
+	u64	r11;
+	u64	r12;
+	u64	r13;
+	u64	r14;
+	u64	r15;
+};
+
+#define PUSH_ALL_REGS_STR	\
+	"pushq	%r15\n\t"	\
+	"pushq	%r14\n\t"	\
+	"pushq	%r13\n\t"	\
+	"pushq	%r12\n\t"	\
+	"pushq	%r11\n\t"	\
+	"pushq	%r10\n\t"	\
+	"pushq	%r9\n\t"	\
+	"pushq	%r8\n\t"	\
+	"pushq	%rdx\n\t"	\
+	"pushq	%rcx\n\t"	\
+	"pushq	%rbx\n\t"	\
+	"pushq	%rax\n\t"	\
+	"pushq	%rdi\n\t"	\
+	"pushq	%rsi\n\t"	\
+	"pushq	%rbp\n\t"	\
+	"pushq	%rsp\n\t"	\
+	"pushfq\n\t"		\
+	/* Skip %rip */		\
+	"subq	$8, %rsp\n\t"	\
+
+#define POP_ALL_REGS_STR	\
+	"addq	$8, %rsp\n\t"	\
+	"popfq\n\t"		\
+	"popq	%rsp\n\t"	\
+	"popq 	%rbp\n\t"	\
+	"popq	%rsi\n\t"	\
+	"popq	%rdi\n\t"	\
+	"popq	%rax\n\t"	\
+	"popq	%rbx\n\t"	\
+	"popq	%rcx\n\t"	\
+	"popq	%rdx\n\t"	\
+	"popq	%r8\n\t"	\
+	"popq	%r9\n\t"	\
+	"popq	%r10\n\t"	\
+	"popq	%r11\n\t"	\
+	"popq	%r12\n\t"	\
+	"popq	%r13\n\t"	\
+	"popq	%r14\n\t"	\
+	"popq	%r15\n\t"	\
+
+void dump_x86_regs(struct x86_regs *regs);
+
 #endif /* !__ASM__ */
 #endif /* !_X86_H_ */

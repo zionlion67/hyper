@@ -108,9 +108,9 @@ void setup_test_guest(struct vmm *vmm)
 	//memcpy(vmm->guest_mem_start + (1 << 20), test_code32, SIZEOF_TEST_CODE);
 
 	reg_state->dr7 = read_dr7();
-	reg_state->rflags = read_rflags() | 0x2;
-	reg_state->rsp = read_rsp();
-	reg_state->rip = vmm->guest_mem.start + (1 << 20);
+	reg_state->regs.rflags = read_rflags() | 0x2;
+	reg_state->regs.rsp = read_rsp();
+	reg_state->regs.rip = vmm->guest_mem.start + (1 << 20);
 	(void)test_code;
 
 	vmm->guest_state.vmcs_link = (u64)-1ULL;
@@ -257,7 +257,7 @@ static void setup_x86_default_regs(struct vmm *vmm)
 	setup_x86_table_regs(vmm);
 
 	vmm->guest_state.reg_state.dr7 = 0x400;
-	vmm->guest_state.reg_state.rflags = 0x2;
+	vmm->guest_state.reg_state.regs.rflags = 0x2;
 }
 
 #define VMX_NO_VMCS_LINK ~((u64)0ULL)
@@ -270,8 +270,8 @@ int setup_test_guest32(struct vmm *vmm)
 	memcpy(vmm->guest_mem.start + (1 << 20), test_code32 + 4,
 	       (u64)dummy_func - (u64)test_code32);
 
-	vmm->guest_state.reg_state.rsp = 0x400000;
-	vmm->guest_state.reg_state.rip = (1 << 20);
+	vmm->guest_state.reg_state.regs.rsp = 0x400000;
+	vmm->guest_state.reg_state.regs.rip = (1 << 20);
 
 	return 0;
 }
@@ -384,12 +384,12 @@ int setup_linux_guest(struct vmm *vmm)
 	/* TODO add initrd */
 
 	struct vmcs_guest_register_state *state = &vmm->guest_state.reg_state;
-	state->rsp = 0x400000;
-	state->rip = LINUX_KERNEL_LOAD_ADDR;
-	state->rsi = BOOT_SECTOR_ADDR;
-	state->rdi = 0;
-	state->rbp = 0;
-	state->rbx = 0;
+	state->regs.rsp = 0x400000;
+	state->regs.rip = LINUX_KERNEL_LOAD_ADDR;
+	state->regs.rsi = BOOT_SECTOR_ADDR;
+	state->regs.rdi = 0;
+	state->regs.rbp = 0;
+	state->regs.rbx = 0;
 
 	vmm->guest_state.vmcs_link = VMX_NO_VMCS_LINK;
 	return 0;
