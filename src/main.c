@@ -131,8 +131,10 @@ void hyper_main(u32 magic, u32 info_addr)
 	};
 	init_pci_bus(&pci_bus);
 
+#ifndef DEBUG
 	if (!has_vmx_support())
 		panic("VMX is not supported by this CPU.\n");
+#endif
 
 	struct vmm vmm = {
 		.setup_guest = setup_linux_guest,

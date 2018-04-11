@@ -204,6 +204,8 @@ static void ept_violation_handler(struct vmm *vmm __maybe_unused,
 	printf("Guest linear addr: 0x%lx\n", guest_addr);
 	__vmread(GUEST_PHYSICAL_ADDRESS, &guest_addr);
 	printf("Guest physical addr: 0x%lx\n", guest_addr);
+	paddr_t host_paddr = ept_translate(&vmm->eptp, guest_addr);
+	printf("Host physical addr: 0x%x%x\n", host_paddr >> 32, host_paddr & 0xffffffff);
 	__vmread(GUEST_RIP, &guest_addr);
 	printf("Guest RIP: 0x%lx\n", guest_addr);
 	panic("");

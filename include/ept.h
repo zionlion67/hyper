@@ -137,4 +137,6 @@ struct ept_pte {
 	};
 };
 
+paddr_t ept_translate(struct eptp *eptp, paddr_t addr);
+
 #endif
