@@ -1,6 +1,7 @@
 #include <panic.h>
 #include <vmx.h>
 
+#if 0
 asm (
 	".global vm_exit_stub\n\t"
 	"vm_exit_stub:\n\t"
@@ -20,6 +21,19 @@ asm (
 	"2:\n\t"
 	"callq  *vm_exit_handlers(,%rax,8)"
 );
+#endif
+
+asm (
+	".global vm_exit_stub\n\t"
+	"vm_exit_stub:\n\t"
+	"pushq	%rbx\n\t"
+	"pushq	%rbp\n\t"
+	"pushq	%rdi\n\t"
+	"pushq	%rsi\n\t"
+	"movq	32(%rsp), %rdi\n\t"
+	"movq	%rsp, %rsi\n\t"
+	"callq	vm_exit_dispatch\n\t"
+);
 
 struct vm_exit_code {
 	union {
@@ -36,21 +50,32 @@ struct vm_exit_code {
 	};
 } __packed;
 
+struct vm_exit_ctx {
+	u64	rsi;
+	u64	rdi;
+	u64	rbp;
+	u64	rbx;
+
+	u64	exit_qual;
+	struct vm_exit_code exit_code;
+} __packed;
+
 typedef void (*vm_exit_handler_t)(struct vmm *vmm,
-				  struct vm_exit_code exit_code);
+				  struct vm_exit_ctx *ctx);
 
-
+#if 0
 static __used void error_handler(void)
 {
 	panic("VMREAD failed on VM-exit\n");
 }
+#endif
 
 static const char *vm_exit_reason_str[] = {
 	[0] = "Exception or NMI",
 	[1] = "External Interrupt",
 	[2] = "Triple Fault",
 	[3] = "INIT signal",
-	[4] = "SIPI",
+	[4] = "SIPI", 
 	[5] = "IO SMI",
 	[6] = "Other SMI",
 	[7] = "Interrupt Window",
@@ -110,20 +135,27 @@ static const char *vm_exit_reason_str[] = {
 	[64] = "XRSTORS",
 };
 
-static void default_vm_exit_handler(struct vmm *vmm __maybe_unused,
-			     struct vm_exit_code exit_code __maybe_unused)
+static void dump_vm_exit_ctx(struct vm_exit_ctx *ctx)
 {
-	printf("VM EXIT\n");
+#define X(Reg) printf(#Reg": 0x%x\n", ctx->Reg)
+	X(rdi);
+	X(rsi);
+	X(rbp);
+	X(rbx);
+#undef X
+}
 
-	u16 exit_no = exit_code.exit_reason;
+static void default_vm_exit_handler(struct vmm *vmm __maybe_unused,
+				    struct vm_exit_ctx *ctx)
+{
+
+	u16 exit_no = ctx->exit_code.exit_reason;
 	printf("reason: %s (%u)\n", vm_exit_reason_str[exit_no], exit_no);
+	printf("qual: 0x%lx\n", ctx->exit_qual);
+
+	dump_vm_exit_ctx(ctx);
 
 	u64 qual;
-	if (__vmread(EXIT_QUALIFICATION, &qual))
-		printf("VMREAD failed\n");
-
-	printf("qual: 0x%lx\n", qual);
-
 	__vmread(GUEST_RIP, &qual);
 	printf("Guest RIP: 0x%lx\n", qual);
 	panic("");
@@ -144,11 +176,9 @@ static int add_vm_exit_handler(const u32 n, vm_exit_handler_t handler)
 
 /* Dummy handler that just pretty prints the error code */
 static void ept_violation_handler(struct vmm *vmm __maybe_unused,
-				  struct vm_exit_code exit_code __maybe_unused)
+				  struct vm_exit_ctx *ctx)
 {
-	printf("VM EXIT\n");
-	u64 qual;
-	__vmread(EXIT_QUALIFICATION, &qual);
+	u64 qual = ctx->exit_qual;
 	printf("EPT Error code: ", qual);
 
 	u64 guest_addr = (u64)-1;
@@ -183,4 +213,15 @@ int init_vm_exit_handlers(struct vmm *vmm __maybe_unused)
 {
 	add_vm_exit_handler(48, ept_violation_handler);
 	return 0;
+}
+
+static void __used vm_exit_dispatch(struct vmm *vmm, struct vm_exit_ctx *regs)
+{
+	printf("VM EXIT\n");
+	if (__vmread(VM_EXIT_REASON, &regs->exit_code))
+		panic("Cannot read VM EXIT reason\n");
+	if (__vmread(EXIT_QUALIFICATION, &regs->exit_qual))
+		panic("Cannot read VM EXIT qualification\n");
+
+	vm_exit_handlers[regs->exit_code.dword](vmm, regs);
 }

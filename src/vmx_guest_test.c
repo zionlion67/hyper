@@ -183,7 +183,7 @@ static void gate_to_seg_desc(struct gdt_desc *gdt_desc,
 	seg_desc->p = gdt_desc->p;
 	seg_desc->avl = gdt_desc->avl;
 	seg_desc->l = 0;
-	seg_desc->db = gdt_desc->db;
+	seg_desc->db = 1;
 	seg_desc->g = gdt_desc->g;
 	seg_desc->unusable = 0;
 

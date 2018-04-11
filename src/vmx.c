@@ -200,6 +200,35 @@ static int setup_ept(struct vmm *vmm)
 	return 0;
 }
 
+paddr_t ept_translate(struct eptp *eptp, paddr_t addr)
+{
+	paddr_t pgd_addr = eptp->pml4_addr << PAGE_SHIFT;
+	struct ept_pml4e *pgd = (void *)phys_to_virt(pgd_addr);
+	u16 pgd_off = pgd_offset(addr);
+	if (!pg_present(pgd[pgd_off].quad_word))
+		return (paddr_t)-1;
+
+	paddr_t pud_addr = (paddr_t)(pgd[pgd_off].quad_word & PAGE_MASK);
+	struct ept_pdpte *pud = (void *)phys_to_virt(pud_addr);
+	u16 pud_off = pud_offset(addr);
+	if (!pg_present(pud[pud_off].quad_word))
+		return (paddr_t)-1;
+
+	paddr_t pmd_addr = (paddr_t)(pud[pud_off].quad_word & PAGE_MASK);
+	struct ept_pde *pmd = (void *)phys_to_virt(pmd_addr);
+	u16 pmd_off = pmd_offset(addr);
+	if (!pg_present(pmd[pmd_off].quad_word))
+		return (paddr_t)-1;
+
+	paddr_t pt_addr = (paddr_t)(pmd[pmd_off].quad_word & PAGE_MASK);
+	struct ept_pte *pte = (void *)phys_to_virt(pt_addr);
+	u16 pte_off = pte_offset(addr);
+	if (!pg_present(pte[pte_off].quad_word))
+		return (paddr_t)-1;
+
+	return (paddr_t)((pte[pte_off].quad_word & PAGE_MASK) + (addr & ~PAGE_MASK));
+}
+
 static void vmcs_get_host_selectors(struct segment_selectors *sel)
 {
 	sel->cs = read_cs();

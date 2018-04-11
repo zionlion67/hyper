@@ -56,6 +56,6 @@ typedef unsigned gfp_t;
 
 #define FRAMES_PER_2M_PAGE	((2 * BIG_PAGE_SIZE) / PAGE_SIZE)
 
-#define pg_present(p)	(p & PG_PRESENT)
+#define pg_present(p)	((pte_t)p & PG_PRESENT)
 
 #endif /* !_PAGE_TYPES_H */
