@@ -1,14 +1,18 @@
+#include <cpuid.h>
+
 #include <panic.h>
 #include <vmx.h>
 
 asm (
 	".global vm_exit_stub\n\t"
 	"vm_exit_stub:\n\t"
+	"subq	$16, %rsp\n\t"
 	PUSH_ALL_REGS_STR
-	"movq	0x90(%rsp), %rdi\n\t"
+	"movq	0xa0(%rsp), %rdi\n\t"
 	"movq	%rsp, %rsi\n\t"
 	"callq	vm_exit_dispatch\n\t"
 	POP_ALL_REGS_STR
+	"addq	$16, %rsp\n\t"
 	"vmresume\n\t"
 	"jbe error_handler\n\t"
 );
@@ -47,7 +51,7 @@ static const char *vm_exit_reason_str[] = {
 	[1] = "External Interrupt",
 	[2] = "Triple Fault",
 	[3] = "INIT signal",
-	[4] = "SIPI", 
+	[4] = "SIPI",
 	[5] = "IO SMI",
 	[6] = "Other SMI",
 	[7] = "Interrupt Window",
@@ -143,7 +147,7 @@ static void ept_violation_handler(struct vmm *vmm __maybe_unused,
 				  struct vm_exit_ctx *ctx)
 {
 	u64 qual = ctx->exit_qual;
-	printf("EPT Error code: ", qual);
+	printf("EPT Error code: ");
 
 	u64 guest_addr = (u64)-1;
 
@@ -164,8 +168,9 @@ static void ept_violation_handler(struct vmm *vmm __maybe_unused,
 	}
 #undef X
 
+	printf("\n");
 	dump_vm_exit_ctx(ctx);
-	
+
 	printf("Guest linear addr: 0x%lx\n", guest_addr);
 	__vmread(GUEST_PHYSICAL_ADDRESS, &guest_addr);
 	printf("Guest physical addr: 0x%lx\n", guest_addr);
@@ -185,18 +190,70 @@ static inline void set_ctx_cpuid(struct vm_exit_ctx *ctx, u64 eax, u64 ebx,
 	ctx->regs.rdx = edx;
 }
 
+/* cpuid[1].edx */
+#define NEED_FPU	(1 << 0)
+#define NEED_VME	(1 << 1)
+#define NEED_DE		(1 << 2)
+#define NEED_PSE	(1 << 3)
+#define NEED_TSC	(1 << 4)
+#define NEED_MSR	(1 << 5)
+#define NEED_PAE	(1 << 6)
+#define NEED_MCE	(1 << 7)
+#define NEED_CX8	(1 << 8)
+#define NEED_APIC	(1 << 9)
+#define NEED_SEP	(1 << 11)
+#define NEED_PGE	(1 << 13)
+#define NEED_MCA	(1 << 14)
+#define NEED_CMOV	(1 << 15)
+#define NEED_PAT	(1 << 16)
+#define NEED_PSE36	(1 << 17)
+#define NEED_PSN	(1 << 18)
+#define NEED_CLFSH	(1 << 19)
+#define NEED_DS		(1 << 21)
+#define NEED_ACPI	(1 << 22)
+#define NEED_MMX	(1 << 23)
+#define NEED_FXSR	(1 << 24)
+#define NEED_SSE	(1 << 25)
+#define NEED_SSE2	(1 << 26)
+#define NEED_XMM	NEED_SSE
+#define NEED_XMM2	NEED_SSE2
+#define NEED_SS		(1 << 27)
+#define NEED_HTT	(1 << 28)
+#define NEED_TM		(1 << 29)
+#define NEED_PBE	(1 << 31)
+
+#define NEED_LM		(1 << 29)
+#define NEED_3DNOW	(1 << 31)
+
+/* Minimum to make 64bits linux happy */
+#define CPUID_1_EAX	0
+#define CPUID_1_EBX	0
+#define CPUID_1_ECX	0
+#define CPUID_1_EDX	(NEED_FPU|NEED_PSE|NEED_MSR|NEED_PAE|\
+			 NEED_CX8|NEED_PGE|NEED_FXSR|NEED_CMOV|\
+			 NEED_XMM|NEED_XMM2)
+
 static void cpuid_exit_handler(struct vmm *vmm __unused, struct vm_exit_ctx *ctx)
 {
-	dump_vm_exit_ctx(ctx);
-
 	const char *signature = "BitzBitzBitz";
 	u64 sig1 = (u64)(*(u32 *)signature);
 	u64 sig2 = (u64)(*(u32 *)signature + 4);
 	u64 sig3 = (u64)(*(u32 *)signature + 8);
-	
+
 	switch (ctx->regs.rax) {
 	case 0:
 		set_ctx_cpuid(ctx, 1, sig1, sig2, sig3);
+		break;
+	case 1:
+		set_ctx_cpuid(ctx, CPUID_1_EAX, CPUID_1_EBX, CPUID_1_ECX,
+			      CPUID_1_EDX);
+		break;
+	/* Extended CPUIDs */
+	case 0x80000000:
+		set_ctx_cpuid(ctx, 0x80000001, 0, 0, 0);
+		break;
+	case 0x80000001:
+		set_ctx_cpuid(ctx, 0, 0, 0, NEED_LM|NEED_3DNOW);
 		break;
 	default:
 		panic("CPUID eax not implemented yet\n");
@@ -215,10 +272,17 @@ int init_vm_exit_handlers(struct vmm *vmm __maybe_unused)
 
 static void __used vm_exit_dispatch(struct vmm *vmm, struct vm_exit_ctx *ctx)
 {
-	printf("VM EXIT\n");
+#ifdef DEBUG
+	printf("\nVM EXIT ");
+#endif
 
 	__vmread(VM_EXIT_REASON, &ctx->exit_code);
 	__vmread(EXIT_QUALIFICATION, &ctx->exit_qual);
+
+#ifdef DEBUG
+	u16 exit_no = ctx->exit_code.exit_reason;
+	printf("Reason: %s (%u)\n", vm_exit_reason_str[exit_no], exit_no);
+#endif
 
 	__vmread(GUEST_RIP, &ctx->regs.rip);
 	__vmread(GUEST_RSP, &ctx->regs.rsp);
