@@ -175,9 +175,40 @@ static void ept_violation_handler(struct vmm *vmm __maybe_unused,
 	panic("");
 }
 
+
+static inline void set_ctx_cpuid(struct vm_exit_ctx *ctx, u64 eax, u64 ebx,
+				 u64 ecx, u64 edx)
+{
+	ctx->regs.rax = eax;
+	ctx->regs.rbx = ebx;
+	ctx->regs.rcx = ecx;
+	ctx->regs.rdx = edx;
+}
+
+static void cpuid_exit_handler(struct vmm *vmm __unused, struct vm_exit_ctx *ctx)
+{
+	dump_vm_exit_ctx(ctx);
+
+	const char *signature = "BitzBitzBitz";
+	u64 sig1 = (u64)(*(u32 *)signature);
+	u64 sig2 = (u64)(*(u32 *)signature + 4);
+	u64 sig3 = (u64)(*(u32 *)signature + 8);
+	
+	switch (ctx->regs.rax) {
+	case 0:
+		set_ctx_cpuid(ctx, 1, sig1, sig2, sig3);
+		break;
+	default:
+		panic("CPUID eax not implemented yet\n");
+		break;
+	}
+}
+
+#define CPUID_EXIT_NO		10
 #define EPT_VIOLATION_EXIT_NO	48
 int init_vm_exit_handlers(struct vmm *vmm __maybe_unused)
 {
+	add_vm_exit_handler(CPUID_EXIT_NO, cpuid_exit_handler);
 	add_vm_exit_handler(EPT_VIOLATION_EXIT_NO, ept_violation_handler);
 	return 0;
 }

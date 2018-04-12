@@ -199,15 +199,11 @@ struct x86_regs {
 	"pushq	%rdi\n\t"	\
 	"pushq	%rsi\n\t"	\
 	"pushq	%rbp\n\t"	\
-	"pushq	%rsp\n\t"	\
-	"pushfq\n\t"		\
-	/* Skip %rip */		\
-	"subq	$8, %rsp\n\t"	\
+	/* Skip %rip, %rsp and rflags */ \
+	"subq	$24, %rsp\n\t"	\
 
 #define POP_ALL_REGS_STR	\
-	"addq	$8, %rsp\n\t"	\
-	"popfq\n\t"		\
-	"popq	%rsp\n\t"	\
+	"addq	$24, %rsp\n\t"	\
 	"popq 	%rbp\n\t"	\
 	"popq	%rsi\n\t"	\
 	"popq	%rdi\n\t"	\
