@@ -187,7 +187,7 @@ static int ept_setup_range(struct vmm *vmm, paddr_t host_start,
 /* XXX: ATM allocates 200M of memory for the VM */
 static int setup_ept(struct vmm *vmm)
 {
-	u8 nb_pages = 10;
+	u8 nb_pages = 100;
 	void *p = alloc_pages(nb_pages);
 	if (p == NULL)
 		return 1;
@@ -332,10 +332,17 @@ static inline void vmcs_write_proc_based_ctrls2(struct vmm *vmm, u64 ctl)
 static void vmcs_write_vm_exec_controls(struct vmm *vmm)
 {
 	vmcs_write_pin_based_ctrls(vmm, 0);
-	vmcs_write_proc_based_ctrls(vmm, VM_EXEC_ENABLE_PROC_CTLS2);
-	vmcs_write_proc_based_ctrls2(vmm, VM_EXEC_UNRESTRICTED_GUEST|VM_EXEC_ENABLE_EPT);
+
+	u64 proc_flags1 = VM_EXEC_USE_MSR_BITMAPS|VM_EXEC_ENABLE_PROC_CTLS2;
+	u64 proc_flags2 = VM_EXEC_UNRESTRICTED_GUEST|VM_EXEC_ENABLE_EPT;
+	vmcs_write_proc_based_ctrls(vmm, proc_flags1);
+	vmcs_write_proc_based_ctrls2(vmm, proc_flags2);
 
 	__vmwrite(EXCEPTION_BITMAP, 0);
+
+	paddr_t addr = virt_to_phys(__align_n((u64)vmm->msr_bitmap, PAGE_SIZE));
+	__vmwrite(MSR_BITMAP, addr);
+
 	__vmwrite(CR0_READ_SHADOW, vmm->host_state.control_regs.cr0);
 	__vmwrite(CR4_READ_SHADOW, vmm->host_state.control_regs.cr4);
 	__vmwrite(EPT_POINTER, vmm->eptp.quad_word);
@@ -479,6 +486,24 @@ static inline void vmcs_write_vm_guest_state(struct vmm *vmm)
 	vmcs_write_guest_state(&vmm->guest_state);
 }
 
+#define MSR_BITMAP_SZ		1024
+#define MSR_ALL_BITMAP_SZ	(4 * MSR_BITMAP_SZ)
+#define MSR_BITMAP_READ_LO	0
+#define MSR_BITMAP_READ_HI	(MSR_BITMAP_READ_LO + MSR_BITMAP_SZ)
+#define MSR_BITMAP_WRITE_LO	(MSR_BITMAP_READ_HI + MSR_BITMAP_SZ)
+#define MSR_BITMAP_WRITE_HI	(MSR_BITMAP_WRITE_LO + MSR_BITMAP_SZ)
+
+/* Yet another ugly hack ... */
+static int init_msr_bitmap(struct vmm *vmm)
+{
+	vmm->msr_bitmap = kmalloc(MSR_ALL_BITMAP_SZ * 2);
+	if (vmm->msr_bitmap == NULL)
+		return 1;
+
+	memset(vmm->msr_bitmap, 0, MSR_ALL_BITMAP_SZ * 2);
+	return 0;
+}
+
 /* Hack to launch linux with correct reg state, this is really ugly. */
 static int launch_vm(struct vmm *vmm)
 {
@@ -514,8 +539,6 @@ int vmm_init(struct vmm *vmm)
 
 	u64 cr4 = read_cr4();
 	cr4 |= CR4_VMXE;
-	write_cr4(cr4);
-	cr4 = read_cr4();
 	cr4 |= vmm->vmx_msr[VMM_MSR_VMX_CR4_FIXED0];
 	cr4 &= vmm->vmx_msr[VMM_MSR_VMX_CR4_FIXED1];
 	write_cr4(cr4);
@@ -529,26 +552,29 @@ int vmm_init(struct vmm *vmm)
 
 	if (setup_ept(vmm)) {
 		printf("Failed to setup EPT\n");
-		goto free_vmcs;
+		goto free_host;
 	}
+
+	if (init_msr_bitmap(vmm))
+		goto free_host;
 
 	vmm->setup_guest(vmm);
 	init_vm_exit_handlers(vmm);
 
 	if (__vmxon(virt_to_phys(vmm->vmx_on))) {
 		printf("VMXON failed\n");
-		goto free_vmcs;
+		goto free_msr;
 	}
 
 	paddr_t vmcs_paddr = virt_to_phys(vmm->vmcs);
 	if (__vmclear(vmcs_paddr)) {
 		printf("VMCLEAR failed\n");
-		goto free_vmcs;
+		goto free_vmxoff;
 	}
 
 	if (__vmptrld(vmcs_paddr)) {
 		printf("VMPTRLD failed\n");
-		goto free_vmcs;
+		goto free_vmxoff;
 	}
 
 	vmcs_write_vm_exec_controls(vmm);
@@ -567,14 +593,18 @@ int vmm_init(struct vmm *vmm)
 
 	if (launch_vm(vmm)) {
 		printf("VMLAUNCH failed\n");
-		goto free_vmcs;
+		goto free_vmxoff;
 	}
 
 	return 0;
 
-free_vmcs:
+free_vmxoff:
 	__vmxoff();
-	release_vmcs(vmm->vmcs);
+free_msr:
+	kfree(vmm->msr_bitmap);
+free_host:
 	kfree((void *)(vmm->host_state.rsp - VM_EXIT_STACK_SIZE));
+free_vmcs:
+	release_vmcs(vmm->vmcs);
 	return 1;
 }

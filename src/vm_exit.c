@@ -116,8 +116,6 @@ static void dump_vm_exit_ctx(struct vm_exit_ctx *ctx)
 	printf("Guest registers:\n");
 	dump_x86_regs(&ctx->regs);
 
-	u16 exit_no = ctx->exit_code.exit_reason;
-	printf("reason: %s (%u)\n", vm_exit_reason_str[exit_no], exit_no);
 	printf("qual: 0x%lx\n", ctx->exit_qual);
 
 }

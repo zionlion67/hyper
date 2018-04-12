@@ -338,8 +338,8 @@ static void setup_linux_cmdline(struct vmm *vmm, const char *cmdline)
 {
 	u64 cmdline_len = strlen(cmdline);
 	void *cmdline_ptr = (void *)(vmm->guest_mem.start + COMMAND_LINE_ADDR);
-	memset(cmdline_ptr, 0, cmdline_len + 1);
-	memcpy(cmdline_ptr, cmdline, cmdline_len);
+	/* Include null byte */
+	memcpy(cmdline_ptr, cmdline, cmdline_len + 1);
 }
 
 static inline void map_linux_kernel(vaddr_t ram_start, vaddr_t img_start,

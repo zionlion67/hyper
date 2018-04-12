@@ -311,6 +311,8 @@ struct vmm {
 	struct vmcs_host_state host_state;
 	struct vmcs_guest_state guest_state;
 
+	u8 *msr_bitmap;
+
 	int (*setup_guest)(struct vmm *);
 };
 
