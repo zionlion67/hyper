@@ -259,13 +259,65 @@ static void cpuid_exit_handler(struct vmm *vmm __unused, struct vm_exit_ctx *ctx
 	}
 }
 
-#define CPUID_EXIT_NO		10
-#define EPT_VIOLATION_EXIT_NO	48
-int init_vm_exit_handlers(struct vmm *vmm __maybe_unused)
+static inline void read_guest_control_regs(struct control_regs *regs)
 {
-	add_vm_exit_handler(CPUID_EXIT_NO, cpuid_exit_handler);
-	add_vm_exit_handler(EPT_VIOLATION_EXIT_NO, ept_violation_handler);
-	return 0;
+	__vmread(GUEST_CR0, &regs->cr0);
+	__vmread(GUEST_CR3, &regs->cr3);
+	__vmread(GUEST_CR4, &regs->cr4);
+}
+
+#define READ_SEG_DESC(segs, Desc, desc) 				\
+	do {								\
+		__vmread(GUEST_##Desc##_SELECTOR, &segs->desc.selector); \
+		__vmread(GUEST_##Desc##_BASE, &segs->desc.base);	\
+		__vmread(GUEST_##Desc##_LIMIT, &segs->desc.limit);	\
+		__vmread(GUEST_##Desc##_AR_BYTES, &segs->desc.access);	\
+	} while (0)
+
+static void read_guest_seg_descs(struct segment_descriptors *segs)
+{
+	READ_SEG_DESC(segs, CS, cs);
+	READ_SEG_DESC(segs, DS, ds);
+	READ_SEG_DESC(segs, ES, es);
+	READ_SEG_DESC(segs, SS, ss);
+	READ_SEG_DESC(segs, FS, fs);
+	READ_SEG_DESC(segs, GS, gs);
+	READ_SEG_DESC(segs, TR, tr);
+	READ_SEG_DESC(segs, LDTR, ldtr);
+}
+
+static void read_guest_table_regs(struct vmcs_guest_register_state *state)
+{
+	__vmread(GUEST_GDTR_BASE, &state->gdtr.base);
+	__vmread(GUEST_IDTR_BASE, &state->idtr.base);
+	__vmread(GUEST_GDTR_LIMIT, &state->gdtr.limit);
+	__vmread(GUEST_IDTR_LIMIT, &state->idtr.limit);
+}
+
+static void read_guest_msrs(struct vmcs_state_msr *msr)
+{
+	__vmread(GUEST_SYSENTER_CS, &msr->ia32_sysenter_cs);
+	__vmread(GUEST_SYSENTER_ESP, &msr->ia32_sysenter_esp);
+	__vmread(GUEST_SYSENTER_EIP, &msr->ia32_sysenter_eip);
+	__vmread(GUEST_PAT, &msr->ia32_pat);
+	__vmread(GUEST_EFER, &msr->ia32_efer);
+	__vmread(GUEST_BNDCFGS, &msr->ia32_bndcfgs);
+	__vmread(GUEST_DEBUGCTL, &msr->ia32_debugctl);
+	__vmread(GUEST_PERF_GLOBAL_CTRL, &msr->ia32_perf_global_ctrl);
+}
+
+static void read_guest_reg_state(struct vmcs_guest_register_state *state)
+{
+	read_guest_control_regs(&state->control_regs);	
+	read_guest_seg_descs(&state->seg_descs);
+	read_guest_table_regs(state);
+	read_guest_msrs(&state->msr);
+}
+
+static void read_guest_state(struct vmm *vmm)
+{
+	struct vmcs_guest_state *guest_state = &vmm->guest_state;
+	read_guest_reg_state(&guest_state->reg_state);
 }
 
 static void __used vm_exit_dispatch(struct vmm *vmm, struct vm_exit_ctx *ctx)
@@ -286,6 +338,8 @@ static void __used vm_exit_dispatch(struct vmm *vmm, struct vm_exit_ctx *ctx)
 	__vmread(GUEST_RSP, &ctx->regs.rsp);
 	__vmread(GUEST_RFLAGS, &ctx->regs.rflags);
 
+	read_guest_state(vmm);
+
 	/* Handlers must not modify guest RIP */
 	vm_exit_handlers[ctx->exit_code.dword](vmm, ctx);
 
@@ -293,4 +347,13 @@ static void __used vm_exit_dispatch(struct vmm *vmm, struct vm_exit_ctx *ctx)
 	__vmread(VM_EXIT_INSTRUCTION_LEN, &insn_len);
 	ctx->regs.rip += insn_len;
 	__vmwrite(GUEST_RIP, ctx->regs.rip);
+}
+
+#define CPUID_EXIT_NO		10
+#define EPT_VIOLATION_EXIT_NO	48
+int init_vm_exit_handlers(struct vmm *vmm __maybe_unused)
+{
+	add_vm_exit_handler(CPUID_EXIT_NO, cpuid_exit_handler);
+	add_vm_exit_handler(EPT_VIOLATION_EXIT_NO, ept_violation_handler);
+	return 0;
 }

@@ -58,11 +58,13 @@ static void dump_guest_register_state(struct vmcs_guest_register_state *state)
 #undef X
 	printf("\n");
 
+#if 0
 	printf("DR7:\t0x%lx\n", state->dr7);
 	printf("RFLAGS:\t0x%lx\n", state->regs.rflags);
 	printf("RSP:\t0x%lx\n", state->regs.rsp);
 	printf("RIP:\t0x%lx\n", state->regs.rip);
 	printf("\n");
+#endif
 
 }
 
