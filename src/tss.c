@@ -35,7 +35,7 @@ void load_tss(void)
 	u32 limit = sizeof(struct tss);
 	u64 tss_addr = virt_to_phys((u64)&tss);
 
-	struct gdt_desc *gdt = get_gdt_ptr();
+	struct gdt_desc *gdt = (struct gdt_desc *)get_gdt_ptr();
 	struct tss_descriptor *tss_descriptor = (void *)&gdt[GDT_ENTRY_TSS];
 	memset(tss_descriptor, 0, sizeof(struct tss_descriptor));
 	struct gdt_desc *tss_desc = &tss_descriptor->tss_lo;

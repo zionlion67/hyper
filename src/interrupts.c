@@ -43,6 +43,13 @@ static struct exception_str exceptions_str[] = {
 	EX_STR("Virtualization",	"VE"),
 };
 
+const char *exception_str(const u16 irq)
+{
+	if (irq >= array_size(exceptions_str))
+		return NULL;
+	return exceptions_str[irq].name;
+}
+
 static int add_gate(const u16 irq, u64 handler, u8 ist, u8 flags)
 {
 	if (irq >= NR_INTERRUPTS)

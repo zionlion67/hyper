@@ -65,7 +65,7 @@ void setup_test_guest(struct vmm *vmm)
 	reg_state->control_regs.cr3 = vmm->host_state.control_regs.cr3;
 	reg_state->control_regs.cr4 = vmm->host_state.control_regs.cr4;
 
-	struct gdt_desc *gdt = get_gdt_ptr();
+	struct gdt_desc *gdt = (struct gdt_desc *)get_gdt_ptr();
 	struct gdt_desc *cs_desc = gdt + (VMM_HOST_SEL(vmm, cs) >> 3);
 	struct gdt_desc *ds_desc = gdt + (VMM_HOST_SEL(vmm, ds) >> 3);
 	struct gdt_desc *tr_desc = gdt + (VMM_HOST_SEL(vmm, tr) >> 3);
@@ -208,13 +208,19 @@ static void setup_x86_tss(struct vmm *vmm)
 	state->seg_descs.tr.p = 1;
 	state->seg_descs.tr.g = 0;
 	state->seg_descs.tr.limit = 103;
+
 	state->seg_descs.ldtr.base_field = GUEST_LDTR_SELECTOR;
-	state->seg_descs.ldtr.unusable = 1;
+	state->seg_descs.ldtr.type = 0x2;
+	state->seg_descs.ldtr.s = 0;
+	state->seg_descs.ldtr.p = 1;
+	state->seg_descs.ldtr.g = 1;
+	state->seg_descs.ldtr.limit = 0xffffffff;
+	state->seg_descs.ldtr.unusable = 0;
 }
 
 static void setup_x86_seg_descs(struct vmm *vmm)
 {
-	struct gdt_desc *gdt = get_gdt_ptr();
+	struct gdt_desc *gdt = (struct gdt_desc *)get_gdt_ptr();
 	struct gdt_desc *cs_desc = gdt + (VMM_HOST_SEL(vmm, cs) >> 3);
 	struct gdt_desc *ds_desc = gdt + (VMM_HOST_SEL(vmm, ds) >> 3);
 
@@ -299,7 +305,7 @@ static void init_e820_table(struct boot_params *params)
 	struct boot_e820_entry *post_isa = &params->e820_table[idx++];
 
 	set_e820_entry(pre_isa, 0x0, ISA_START_ADDRESS - 1, E820_RAM);
-	set_e820_entry(post_isa, ISA_END_ADDRESS, 0xffffffff - ISA_END_ADDRESS,
+	set_e820_entry(post_isa, ISA_END_ADDRESS, (200 << 20) - ISA_END_ADDRESS,
 		       E820_RAM);
 
 	params->e820_entries = idx;

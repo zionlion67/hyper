@@ -43,7 +43,7 @@ static void pci_read_config_common(struct pci_addr addr,
 {
 	for (u16 i = 0; i < sizeof(struct pci_config_common); i += sizeof(u32)) {
 		addr.reg = i;
-		u32 *tmp = (u8 *)config + i;
+		u32 *tmp = (u32 *)((u8 *)config + i);
 		*tmp = pci_inl(addr);
 	}
 }

@@ -328,36 +328,40 @@ static inline void vmcs_write_proc_based_ctrls2(struct vmm *vmm, u64 ctl)
 			   MSR_VMX_PROC_CTLS2);
 }
 
-/* TODO add MSR Bitmap */
 static void vmcs_write_vm_exec_controls(struct vmm *vmm)
 {
 	vmcs_write_pin_based_ctrls(vmm, 0);
 
-	u64 proc_flags1 = VM_EXEC_USE_MSR_BITMAPS|VM_EXEC_ENABLE_PROC_CTLS2;
+	u64 proc_flags1 = VM_EXEC_USE_MSR_BITMAPS|VM_EXEC_ENABLE_PROC_CTLS2|
+			  VM_EXEC_CR3_LOAD_EXIT;
 	u64 proc_flags2 = VM_EXEC_UNRESTRICTED_GUEST|VM_EXEC_ENABLE_EPT;
 	vmcs_write_proc_based_ctrls(vmm, proc_flags1);
 	vmcs_write_proc_based_ctrls2(vmm, proc_flags2);
 
-	__vmwrite(EXCEPTION_BITMAP, 0);
+	__vmwrite(EXCEPTION_BITMAP, ~0ull);
 
 	paddr_t addr = virt_to_phys(__align_n((u64)vmm->msr_bitmap, PAGE_SIZE));
 	__vmwrite(MSR_BITMAP, addr);
 
-	__vmwrite(CR0_READ_SHADOW, vmm->host_state.control_regs.cr0);
+	u64 guest_cr0 = vmm->guest_state.reg_state.control_regs.cr0;
+	__vmwrite(CR0_READ_SHADOW, guest_cr0);
+	__vmwrite(CR0_GUEST_HOST_MASK, guest_cr0);
+
 	__vmwrite(CR4_READ_SHADOW, vmm->host_state.control_regs.cr4);
 	__vmwrite(EPT_POINTER, vmm->eptp.quad_word);
 }
 
 static void vmcs_write_vm_exit_controls(struct vmm *vmm)
 {
-	vmcs_write_control(vmm, VM_EXIT_CONTROLS, VM_EXIT_LONG_MODE,
+	vmcs_write_control(vmm, VM_EXIT_CONTROLS,
+			   VM_EXIT_LONG_MODE|VM_EXIT_SAVE_MSR_EFER,
 			   MSR_VMX_TRUE_EXIT_CTLS);
 }
 
 /* TODO check if guest is in LM or PM */
 static void vmcs_write_vm_entry_controls(struct vmm *vmm)
 {
-	vmcs_write_control(vmm, VM_ENTRY_CONTROLS, 0,
+	vmcs_write_control(vmm, VM_ENTRY_CONTROLS, VM_ENTRY_LOAD_MSR_EFER,
 			   MSR_VMX_TRUE_ENTRY_CTLS);
 }
 

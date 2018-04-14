@@ -9,6 +9,7 @@
 #define NR_VMX_MSR 17
 
 /* VM Execution control fields */
+#define VM_EXEC_CR3_LOAD_EXIT			(1 << 15)
 #define VM_EXEC_USE_MSR_BITMAPS			(1 << 28)
 #define VM_EXEC_ENABLE_PROC_CTLS2		(1 << 31)
 #define VM_EXEC_ENABLE_EPT			(1 << 1)
@@ -363,13 +364,13 @@ static inline void __vmxoff(void)
 	asm volatile ("vmxoff");
 }
 
-static inline u8 __vmread(enum vmcs_field field, u64 *val)
+static inline u8 __vmread(enum vmcs_field field, void *val)
 {
 	u8 err = 0;
 	asm volatile ("vmread %[field], %[val]\n\t"
 		      "setna %[error]\n\t"
 		      : [error] "=r"(err)
-		      : [field] "r"((u64)field), [val] "m"(*val)
+		      : [field] "r"((u64)field), [val] "m"(*(u64 *)val)
 		      : "memory"
 		     );
 	return err;

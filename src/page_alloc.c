@@ -32,7 +32,7 @@ static void init_memory_map(struct multiboot_tag_mmap *mmap)
 	multiboot_memory_map_t *m = mmap->entries;
 	u64 end = (u64)mmap + mmap->size;
 
-	for (; (u64)m < end; m = ((u8 *)m + mmap->entry_size)) {
+	for (; (u64)m < end; m = (void *)((u8 *)m + mmap->entry_size)) {
 		struct mem_zone *zone = &memory_map[mem_zone_cnt];
 		if (m->type != MULTIBOOT_MEMORY_AVAILABLE)
 			continue;

@@ -16,6 +16,8 @@
 #define MSR_EFER		0xc0000080 /* Extended Features Register */
 #define MSR_EFER_LME_BIT	8
 #define MSR_EFER_LME		(1 << MSR_EFER_LME_BIT)
+#define MSR_EFER_LMA_BIT	10
+#define MSR_EFER_LMA		(1 << MSR_EFER_LMA_BIT)
 
 #define MSR_FEATURE_CONTROL			0x003a
 #define MSR_FEATURE_CONTROL_LOCK		0x0001
@@ -183,24 +185,24 @@ struct x86_regs {
 	u64	r15;
 };
 
-#define PUSH_ALL_REGS_STR	\
-	"pushq	%r15\n\t"	\
-	"pushq	%r14\n\t"	\
-	"pushq	%r13\n\t"	\
-	"pushq	%r12\n\t"	\
-	"pushq	%r11\n\t"	\
-	"pushq	%r10\n\t"	\
-	"pushq	%r9\n\t"	\
-	"pushq	%r8\n\t"	\
-	"pushq	%rdx\n\t"	\
-	"pushq	%rcx\n\t"	\
-	"pushq	%rbx\n\t"	\
-	"pushq	%rax\n\t"	\
-	"pushq	%rdi\n\t"	\
-	"pushq	%rsi\n\t"	\
-	"pushq	%rbp\n\t"	\
-	/* Skip %rip, %rsp and rflags */ \
-	"subq	$24, %rsp\n\t"	\
+#define PUSH_ALL_REGS_STR		\
+	"pushq	%r15\n\t"		\
+	"pushq	%r14\n\t"		\
+	"pushq	%r13\n\t"		\
+	"pushq	%r12\n\t"		\
+	"pushq	%r11\n\t"		\
+	"pushq	%r10\n\t"		\
+	"pushq	%r9\n\t"		\
+	"pushq	%r8\n\t"		\
+	"pushq	%rdx\n\t"		\
+	"pushq	%rcx\n\t"		\
+	"pushq	%rbx\n\t"		\
+	"pushq	%rax\n\t"		\
+	"pushq	%rdi\n\t"		\
+	"pushq	%rsi\n\t"		\
+	"pushq	%rbp\n\t"		\
+	/* Skip %rip, %rsp & rflags */ 	\
+	"subq	$24, %rsp\n\t"		\
 
 #define POP_ALL_REGS_STR	\
 	"addq	$24, %rsp\n\t"	\

@@ -55,5 +55,6 @@ struct idt_gate {
 typedef void (*irqhandler_t)(struct irq_frame *);
 
 int init_idt(void);
+const char *exception_str(const u16 irq);
 
 #endif

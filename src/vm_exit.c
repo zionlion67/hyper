@@ -1,5 +1,7 @@
 #include <cpuid.h>
 
+#include <interrupts.h>
+#include <page.h>
 #include <panic.h>
 #include <vmx.h>
 
@@ -46,6 +48,7 @@ static __used void error_handler(void)
 	panic("VMRESUME failed...");
 }
 
+#ifdef DEBUG
 static const char *vm_exit_reason_str[] = {
 	[0] = "Exception or NMI",
 	[1] = "External Interrupt",
@@ -110,6 +113,7 @@ static const char *vm_exit_reason_str[] = {
 	[63] = "XSAVE",
 	[64] = "XRSTORS",
 };
+#endif
 
 static void dump_vm_exit_ctx(struct vm_exit_ctx *ctx)
 {
@@ -259,6 +263,174 @@ static void cpuid_exit_handler(struct vmm *vmm __unused, struct vm_exit_ctx *ctx
 	}
 }
 
+#define INTR_EXTERNAL		0
+#define INTR_NMI		2
+#define INTR_HW_EXCEPTION	3
+#define INTR_SOFT		4
+#define INTR_PRIV_EXCEPTION	5
+#define	INTR_SOFT_EXCEPTION	6
+struct idt_vector_info {
+	union {
+		struct {
+			u32	vec : 8;
+			u32	type : 3;
+			u32	code_valid : 1;
+			u32	reserved : 19;
+			u32	valid : 1;
+
+		};
+		u32	dword;
+	};
+} __packed;
+
+static void exception_handler(struct vmm *vmm, struct vm_exit_ctx *ctx)
+{
+	u64 val;
+	__vmread(VM_EXIT_INTR_INFO, &val);
+
+	struct idt_vector_info info_vec = {
+		.dword = val & 0xffffffff,
+	};
+	printf("Exception: %s (valid=%u)\n", exception_str(info_vec.vec),
+					     info_vec.valid);
+
+	if (info_vec.code_valid) {
+		__vmread(VM_EXIT_INTR_ERROR_CODE, &val);
+		printf("Error code: 0x%x%x\n", val >> 32, val & 0xffffffff);
+	}
+
+	dump_vm_exit_ctx(ctx);
+	dump_guest_state(&vmm->guest_state);
+
+	u64 cr2 = read_cr2();
+	printf("CR2: 0x%x%x\n", cr2 >> 32, cr2 & 0xfffffffff);
+
+	panic("");
+}
+
+#define ACCESS_TYPE_MOV_TO_CR	0	
+#define ACCESS_TYPE_MOV_FROM_CR	1
+#define ACCESS_TYPE_CLTS	2
+#define ACCESS_TYPE_LMSW	3
+struct cr_access_info {
+	union {
+		struct {
+			u64	num : 4;
+			u64	access_type : 2;
+			u64	lmsw_op_type : 1;
+			u64	reserved1 : 1;
+			u64	source_op : 4;
+			u64	reserved2 : 4;
+			u64	lmsw_source : 16;
+			u64	reserved3 : 32;
+		};
+		u64	quad_word;
+	};
+} __packed;
+
+static u64 *get_operand_reg(struct vm_exit_ctx *ctx, u8 num)
+{
+	switch (num) {
+	case 0:
+		return &ctx->regs.rax;
+	case 1:
+		return &ctx->regs.rcx;
+	case 2:
+		return &ctx->regs.rdx;
+	case 3:
+		return &ctx->regs.rbx;
+	case 4:
+		return &ctx->regs.rsp;
+	case 5:
+		return &ctx->regs.rbp;
+	case 6:
+		return &ctx->regs.rsi;
+	case 7:
+		return &ctx->regs.rdi;
+	case 8 ... 15:
+		return (&ctx->regs.r8) + num - 8;
+	default:
+		panic("Cannot determine MOV TO CR source operand\n");
+	}
+}
+
+static void reload_pdpte(struct vmm *vmm)
+{
+	u64 cr3 = vmm->guest_state.reg_state.control_regs.cr3 & PAGE_MASK;
+	
+	paddr_t pdpt_paddr = ept_translate(&vmm->eptp, (cr3 & PAGE_MASK));
+
+	u64 *pdpte = (u64 *)phys_to_virt(pdpt_paddr);
+
+	for (u8 i = 0; i < 4; ++i) {
+		vmm->guest_state.pdpte[i] = pdpte[i];
+		__vmwrite(GUEST_PDPTE0 + i * 2, pdpte[i]);
+	}
+}
+
+static inline void set_guest_long_mode(struct vmm *vmm)
+{
+	struct vmcs_guest_register_state *state = &vmm->guest_state.reg_state;
+	state->msr.ia32_efer |= MSR_EFER_LMA;
+
+	__vmwrite(GUEST_EFER, state->msr.ia32_efer);
+
+	u64 vm_entry_ctl;
+	__vmread(VM_ENTRY_CONTROLS, &vm_entry_ctl);
+	vm_entry_ctl |= VM_ENTRY_IA32E_GUEST;
+	__vmwrite(VM_ENTRY_CONTROLS, vm_entry_ctl);
+}
+
+static inline int turn_on_paging(u64 *new_cr0, u64 *cr0)
+{
+	return !(*cr0 & CR0_PG) && (*new_cr0 & CR0_PG);
+}
+
+static inline void cr_access_cr0(struct vmm *vmm, u64 *new_cr0)
+{
+	struct vmcs_guest_register_state *state = &vmm->guest_state.reg_state;
+	u64 *cr0 = &state->control_regs.cr0;
+
+	if (turn_on_paging(new_cr0, cr0) && state->msr.ia32_efer & MSR_EFER_LME)
+		set_guest_long_mode(vmm);
+
+	*cr0 |= *new_cr0;
+
+	__vmwrite(GUEST_CR0, *cr0);
+	__vmwrite(CR0_READ_SHADOW, *cr0);
+}
+
+static void cr_access_cr3(struct vmm *vmm, u64 *reg)
+{
+	u64 *cr3 = &vmm->guest_state.reg_state.control_regs.cr3;
+	*cr3 = *reg;
+
+	if ((vmm->guest_state.reg_state.control_regs.cr4 & CR4_PAE))
+		reload_pdpte(vmm);
+
+	__vmwrite(GUEST_CR3, *cr3);
+}
+
+static void cr_access_handler(struct vmm *vmm, struct vm_exit_ctx *ctx)
+{
+	struct cr_access_info cr_info = {
+		.quad_word = ctx->exit_qual,
+	};
+
+	if (cr_info.access_type != 0)
+		panic("Unimplemented MOV CR access type\n");
+
+	u64 *reg = get_operand_reg(ctx, cr_info.source_op);
+
+	if (cr_info.num == 0) {
+		cr_access_cr0(vmm, reg);
+	} else if (cr_info.num == 3) {
+		cr_access_cr3(vmm, reg);
+	} else {
+		panic("Unimplemnted MOV TO CR (cr{0,3} atm");
+	}
+}
+
 static inline void read_guest_control_regs(struct control_regs *regs)
 {
 	__vmread(GUEST_CR0, &regs->cr0);
@@ -318,6 +490,10 @@ static void read_guest_state(struct vmm *vmm)
 {
 	struct vmcs_guest_state *guest_state = &vmm->guest_state;
 	read_guest_reg_state(&guest_state->reg_state);
+
+	for (u8 i = 0; i < 4; ++i) {
+		__vmread(GUEST_PDPTE0 + i * 2, &guest_state->pdpte[i]);
+	}
 }
 
 static void __used vm_exit_dispatch(struct vmm *vmm, struct vm_exit_ctx *ctx)
@@ -349,11 +525,15 @@ static void __used vm_exit_dispatch(struct vmm *vmm, struct vm_exit_ctx *ctx)
 	__vmwrite(GUEST_RIP, ctx->regs.rip);
 }
 
+#define INTR_OR_NMI_EXIT_NO	0
 #define CPUID_EXIT_NO		10
+#define MOV_CR_EXIT_NO		28
 #define EPT_VIOLATION_EXIT_NO	48
 int init_vm_exit_handlers(struct vmm *vmm __maybe_unused)
 {
+	add_vm_exit_handler(INTR_OR_NMI_EXIT_NO, exception_handler);
 	add_vm_exit_handler(CPUID_EXIT_NO, cpuid_exit_handler);
+	add_vm_exit_handler(MOV_CR_EXIT_NO, cr_access_handler);
 	add_vm_exit_handler(EPT_VIOLATION_EXIT_NO, ept_violation_handler);
 	return 0;
 }
