@@ -183,7 +183,6 @@ static int ept_setup_range(struct vmm *vmm, paddr_t host_start,
 	return 0;
 }
 
-
 /* XXX: ATM allocates 200M of memory for the VM */
 static int setup_ept(struct vmm *vmm)
 {
@@ -201,8 +200,11 @@ static int setup_ept(struct vmm *vmm)
 	return 0;
 }
 
-paddr_t ept_translate(struct eptp *eptp, paddr_t addr)
+/* GPA -> HPA */
+hpa_t ept_translate(struct vmm *vmm, gpa_t addr)
 {
+	struct eptp *eptp = &vmm->eptp;
+
 	paddr_t pgd_addr = eptp->pml4_addr << PAGE_SHIFT;
 	struct ept_pml4e *pgd = (void *)phys_to_virt(pgd_addr);
 	u16 pgd_off = pgd_offset(addr);
@@ -228,7 +230,55 @@ paddr_t ept_translate(struct eptp *eptp, paddr_t addr)
 		return (paddr_t)-1;
 
 	u16 page_off = addr & ~PAGE_MASK;
-	return (paddr_t)((pte[pte_off].quad_word & PAGE_MASK) + page_off);
+	return (hpa_t)((pte[pte_off].quad_word & PAGE_MASK) + page_off);
+}
+
+hva_t gpa_to_hva(struct vmm *vmm, gpa_t gpa)
+{
+	hpa_t hpa = ept_translate(vmm, gpa);
+	return (hva_t)phys_to_virt(hpa);
+}
+
+/* XXX: Only works with 64 bit paging backed with EPT */
+/* Guest virtual to guest physical */
+gpa_t gva_to_gpa(struct vmm *vmm, gva_t gva)
+{
+	u64 guest_cr3 = vmm->guest_state.reg_state.control_regs.cr3 & PAGE_MASK;
+
+	hva_t *guest_pgd = (hva_t *)gpa_to_hva(vmm, guest_cr3);
+	gpa_t pml4e = guest_pgd[pgd_offset(gva)];
+	if (!pg_present(pml4e))
+		return (gpa_t)-1;
+
+	hva_t *guest_pud = (hva_t *)gpa_to_hva(vmm, pml4e & PAGE_MASK);
+	gpa_t pdpte = guest_pud[pud_offset(gva)];
+	if (!pg_present(pdpte))
+		return (gpa_t)-1;
+	if (pg_huge_page(pdpte))
+		return (pdpte & PAGE_MASK) + (gva & ~PUD_MASK);
+
+	hva_t *guest_pmd = (hva_t *)gpa_to_hva(vmm, pdpte & PAGE_MASK);
+	gpa_t pde = guest_pmd[pmd_offset(gva)];
+	if (!pg_present(pde))
+		return (gpa_t)-1;
+	if (pg_huge_page(pde))
+		return (pde & PAGE_MASK) + (gva & ~PMD_MASK);
+
+	hva_t *guest_pt = (hva_t *)gpa_to_hva(vmm, pde & PAGE_MASK);
+	gpa_t pte = guest_pt[pte_offset(gva)];
+	if (!pg_present(pte))
+		return (gpa_t)-1;
+
+	return (pte & PAGE_MASK) + (gva & ~PAGE_MASK);
+}
+
+hva_t gva_to_hva(struct vmm *vmm, gva_t gva)
+{
+	gpa_t gpa = gva_to_gpa(vmm, gva);
+	if (gpa == (gpa_t)-1)
+		return (hva_t)-1;
+
+	return gpa_to_hva(vmm, gpa);
 }
 
 static void vmcs_get_host_selectors(struct segment_selectors *sel)

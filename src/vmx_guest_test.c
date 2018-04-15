@@ -353,7 +353,7 @@ static inline void map_linux_kernel(vaddr_t ram_start, vaddr_t img_start,
 {
 	void *kernel = (void *)(img_start + kernel_offset);
 	u64 kernel_sz = (img_end - img_start) - kernel_offset;
-	
+
 	memcpy((void *)(ram_start + LINUX_KERNEL_LOAD_ADDR), kernel, kernel_sz);
 }
 
@@ -371,7 +371,7 @@ int setup_linux_guest(struct vmm *vmm)
 
 	struct boot_params *boot_params = (void *)(ram_start + BOOT_SECTOR_ADDR);
 	memset(boot_params, 0, sizeof(struct boot_params));
-	
+
 	/* from Documentation/x86/boot.txt:
 	 * The end of setup header can be calculated as follow:
 	 * 	0x0202 + byte value at offset 0x0201
@@ -381,7 +381,7 @@ int setup_linux_guest(struct vmm *vmm)
 	init_linux_boot_params(boot_params);
 
 	/* TODO remove hardcoded cmdline */
-	const char *cmdline = "console=ttyS0 earlyprintk=serial";
+	const char *cmdline = "console=ttyS0 earlyprintk=serial nokaslr";
 	setup_linux_cmdline(vmm, cmdline);
 
 	u64 kernel_offset = (boot_params->hdr.setup_sects + 1) * SECTOR_SIZE;

@@ -11,6 +11,11 @@ typedef u64 pud_t;
 typedef u64 pmd_t;
 typedef u64 pte_t;
 
+typedef u64 gva_t;	/* Guest virtual  */
+typedef u64 gpa_t;	/* Guest physical */
+typedef u64 hva_t;	/* Host virtual   */
+typedef u64 hpa_t;	/* Host physical  */
+
 typedef unsigned gfp_t;
 
 #define PG_PRESENT		(1 << 0)
@@ -57,5 +62,6 @@ typedef unsigned gfp_t;
 #define FRAMES_PER_2M_PAGE	((2 * BIG_PAGE_SIZE) / PAGE_SIZE)
 
 #define pg_present(p)	((pte_t)p & PG_PRESENT)
+#define pg_huge_page(p)	((pte_t)p & PG_HUGE_PAGE)
 
 #endif /* !_PAGE_TYPES_H */

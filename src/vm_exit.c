@@ -176,7 +176,7 @@ static void ept_violation_handler(struct vmm *vmm __maybe_unused,
 	printf("Guest linear addr: 0x%lx\n", guest_addr);
 	__vmread(GUEST_PHYSICAL_ADDRESS, &guest_addr);
 	printf("Guest physical addr: 0x%lx\n", guest_addr);
-	paddr_t host_paddr = ept_translate(&vmm->eptp, guest_addr);
+	paddr_t host_paddr = ept_translate(vmm, guest_addr);
 	printf("Host physical addr: 0x%x%x\n",
 		host_paddr >> 32, host_paddr & 0xffffffff);
 	panic("");
@@ -357,10 +357,7 @@ static u64 *get_operand_reg(struct vm_exit_ctx *ctx, u8 num)
 static void reload_pdpte(struct vmm *vmm)
 {
 	u64 cr3 = vmm->guest_state.reg_state.control_regs.cr3 & PAGE_MASK;
-	
-	paddr_t pdpt_paddr = ept_translate(&vmm->eptp, (cr3 & PAGE_MASK));
-
-	u64 *pdpte = (u64 *)phys_to_virt(pdpt_paddr);
+	u64 *pdpte = (u64 *)gpa_to_hva(vmm, cr3);
 
 	for (u8 i = 0; i < 4; ++i) {
 		vmm->guest_state.pdpte[i] = pdpte[i];

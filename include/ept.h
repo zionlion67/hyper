@@ -137,6 +137,18 @@ struct ept_pte {
 	};
 };
 
-paddr_t ept_translate(struct eptp *eptp, paddr_t addr);
+struct vmm;
+
+/* Address translation helpers. */
+
+/* Guest phys -> Host phys */
+paddr_t ept_translate(struct vmm *vmm, gpa_t addr);
+/* Guest virt -> Guest phys */
+gpa_t gva_to_gpa(struct vmm *vmm, gva_t gva);
+/* Guest virt -> Host virt */
+hva_t gva_to_hva(struct vmm *vmm, gva_t gva);
+/* Guest phys -> Host virt */
+hva_t gpa_to_hva(struct vmm *vmm, gpa_t gpa);
+
 
 #endif
