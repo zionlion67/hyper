@@ -4,10 +4,11 @@ GRUB_CFG = grub_default.cfg
 ISO = hyper.iso
 
 QEMU=/usr/bin/qemu-system-x86_64
-QEMU_OPTS= -drive id=disk,file=$(ISO),if=none \
+#QEMU_OPTS= -drive id=disk,file=$(ISO),if=none \
 	     -device ahci,id=ahci		\
 	     -device ide-drive,drive=disk,bus=ahci.0 \
 	     -serial stdio -m 4G
+QEMU_OPTS=-cdrom $(ISO) -serial stdio -m 4G
 
 INCLUDE_DIR = include/
 OBJS = src/boot.o 	\

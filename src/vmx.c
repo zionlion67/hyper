@@ -378,6 +378,8 @@ static inline void vmcs_write_proc_based_ctrls2(struct vmm *vmm, u64 ctl)
 			   MSR_VMX_PROC_CTLS2);
 }
 
+#define EXCEPTION_PF	(1ull << 14)
+#define EXCEPTION_BITMAP_MASK	~(EXCEPTION_PF)
 static void vmcs_write_vm_exec_controls(struct vmm *vmm)
 {
 	vmcs_write_pin_based_ctrls(vmm, 0);
@@ -388,7 +390,7 @@ static void vmcs_write_vm_exec_controls(struct vmm *vmm)
 	vmcs_write_proc_based_ctrls(vmm, proc_flags1);
 	vmcs_write_proc_based_ctrls2(vmm, proc_flags2);
 
-	__vmwrite(EXCEPTION_BITMAP, ~0ull);
+	__vmwrite(EXCEPTION_BITMAP, EXCEPTION_BITMAP_MASK);
 
 	paddr_t addr = virt_to_phys(__align_n((u64)vmm->msr_bitmap, PAGE_SIZE));
 	__vmwrite(MSR_BITMAP, addr);
@@ -396,6 +398,10 @@ static void vmcs_write_vm_exec_controls(struct vmm *vmm)
 	u64 guest_cr0 = vmm->guest_state.reg_state.control_regs.cr0;
 	__vmwrite(CR0_READ_SHADOW, guest_cr0);
 	__vmwrite(CR0_GUEST_HOST_MASK, guest_cr0);
+
+	u64 guest_cr4 = vmm->guest_state.reg_state.control_regs.cr4;
+	__vmwrite(CR4_READ_SHADOW, guest_cr4);
+	__vmwrite(CR4_GUEST_HOST_MASK, guest_cr4);
 
 	__vmwrite(CR4_READ_SHADOW, vmm->host_state.control_regs.cr4);
 	__vmwrite(EPT_POINTER, vmm->eptp.quad_word);

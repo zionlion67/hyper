@@ -237,10 +237,11 @@ static inline void set_ctx_cpuid(struct vm_exit_ctx *ctx, u64 eax, u64 ebx,
 
 static void cpuid_exit_handler(struct vmm *vmm __unused, struct vm_exit_ctx *ctx)
 {
-	const char *signature = "BitzBitzBitz";
-	u64 sig1 = (u64)(*(u32 *)signature);
-	u64 sig2 = (u64)(*(u32 *)signature + 4);
-	u64 sig3 = (u64)(*(u32 *)signature + 8);
+	const char signature[] = "BitzDuLSE!\0\0";
+	const u32 *sig_ptr = (const u32 *)signature;
+	u64 sig1 = (u64)sig_ptr[0];
+	u64 sig2 = (u64)sig_ptr[2];
+	u64 sig3 = (u64)sig_ptr[1];
 
 	switch (ctx->regs.rax) {
 	case 0:
@@ -365,7 +366,8 @@ static void reload_pdpte(struct vmm *vmm)
 	}
 }
 
-static inline void set_guest_long_mode(struct vmm *vmm)
+/* TODO REMOVE MOV TO CR3 LOAD EXIT VM ENTRY CONTROL */
+static void set_guest_long_mode(struct vmm *vmm)
 {
 	struct vmcs_guest_register_state *state = &vmm->guest_state.reg_state;
 	state->msr.ia32_efer |= MSR_EFER_LMA;
@@ -399,13 +401,25 @@ static inline void cr_access_cr0(struct vmm *vmm, u64 *new_cr0)
 
 static void cr_access_cr3(struct vmm *vmm, u64 *reg)
 {
-	u64 *cr3 = &vmm->guest_state.reg_state.control_regs.cr3;
+	struct vmcs_guest_register_state *state = &vmm->guest_state.reg_state;
+	u64 *cr3 = &state->control_regs.cr3;
 	*cr3 = *reg;
 
-	if ((vmm->guest_state.reg_state.control_regs.cr4 & CR4_PAE))
+	u64 long_mode_active = (state->msr.ia32_efer >> MSR_EFER_LMA_BIT) & 1;
+
+	if ((state->control_regs.cr4 & CR4_PAE) && !long_mode_active)
 		reload_pdpte(vmm);
 
 	__vmwrite(GUEST_CR3, *cr3);
+}
+
+static void cr_access_cr4(struct vmm *vmm, u64 *reg)
+{
+	u64 *cr4 = &vmm->guest_state.reg_state.control_regs.cr4;
+	*cr4 |= *reg;
+
+	__vmwrite(GUEST_CR4, *cr4);
+	__vmwrite(CR4_READ_SHADOW, *cr4);
 }
 
 static void cr_access_handler(struct vmm *vmm, struct vm_exit_ctx *ctx)
@@ -423,8 +437,10 @@ static void cr_access_handler(struct vmm *vmm, struct vm_exit_ctx *ctx)
 		cr_access_cr0(vmm, reg);
 	} else if (cr_info.num == 3) {
 		cr_access_cr3(vmm, reg);
+	} else if (cr_info.num == 4) {
+		cr_access_cr4(vmm, reg);
 	} else {
-		panic("Unimplemnted MOV TO CR (cr{0,3} atm");
+		panic("Unimplemnted MOV TO CR\n");
 	}
 }
 
