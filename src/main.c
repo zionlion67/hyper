@@ -98,6 +98,12 @@ struct multiboot_tag_module *multiboot_get_linux_module(vaddr_t info_addr)
 	return multiboot_get_module(info_addr, "linux");
 }
 
+static inline
+struct multiboot_tag_module *multiboot_get_linux_initramfs(vaddr_t info_addr)
+{
+	return multiboot_get_module(info_addr, "initramfs");
+}
+
 void hyper_main(u32 magic, u32 info_addr)
 {
 	if (!multiboot2_valid(magic, info_addr))
@@ -110,13 +116,13 @@ void hyper_main(u32 magic, u32 info_addr)
 		panic("Unable to retrieve multiboot memory map\n");
 
 	struct multiboot_tag_module *mod = multiboot_get_linux_module(mbi_addr);
+	struct multiboot_tag_module *init = multiboot_get_linux_initramfs(mbi_addr);
+
+	if ((void *)mod == NULL || (void *)init == NULL)
+		panic("Unable to retrieve bzImage or initramfs\n");
 
 #ifdef DEBUG
 	dump_memory_map(mmap);
-	if (mod) {
-		printf("Found linux module\n");
-		printf("Start: 0x%x End: 0x%x\n", mod->mod_start, mod->mod_end);
-	}
 #endif
 
 	init_idt();
@@ -142,8 +148,14 @@ void hyper_main(u32 magic, u32 info_addr)
 			.start = phys_to_virt(mod->mod_start),
 			.end   = phys_to_virt(mod->mod_end),
 		},
+		.guest_initrd = {
+			.start = phys_to_virt(init->mod_start),
+			.end   = phys_to_virt(init->mod_end),
+		},
 	};
-	vmm_init(&vmm);
 
-	__builtin_unreachable();
+	vmm_init(&vmm);
+	
+	panic("VMM initialization failed\n");
+
 }

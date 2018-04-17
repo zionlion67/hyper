@@ -348,15 +348,6 @@ static void setup_linux_cmdline(struct vmm *vmm, const char *cmdline)
 	memcpy(cmdline_ptr, cmdline, cmdline_len + 1);
 }
 
-static inline void map_linux_kernel(vaddr_t ram_start, vaddr_t img_start,
-				    vaddr_t img_end, u64 kernel_offset)
-{
-	void *kernel = (void *)(img_start + kernel_offset);
-	u64 kernel_sz = (img_end - img_start) - kernel_offset;
-
-	memcpy((void *)(ram_start + LINUX_KERNEL_LOAD_ADDR), kernel, kernel_sz);
-}
-
 int setup_linux_guest(struct vmm *vmm)
 {
 	setup_x86_default_regs(vmm);
@@ -364,6 +355,7 @@ int setup_linux_guest(struct vmm *vmm)
 	vaddr_t ram_start = vmm->guest_mem.start;
 	vaddr_t img_start = vmm->guest_img.start;
 	vaddr_t img_end   = vmm->guest_img.end;
+	u64 img_sz = img_end - img_start;
 
 	struct setup_header *hdr = (void *)(img_start + SETUP_HDR_OFFSET);
 
@@ -385,9 +377,20 @@ int setup_linux_guest(struct vmm *vmm)
 	setup_linux_cmdline(vmm, cmdline);
 
 	u64 kernel_offset = (boot_params->hdr.setup_sects + 1) * SECTOR_SIZE;
-	map_linux_kernel(ram_start, img_start, img_end, kernel_offset);
+	u64 kernel_sz = img_sz - kernel_offset;
+	void *kernel = (void *)(img_start + kernel_offset);
+	memcpy((void *)(ram_start + LINUX_KERNEL_LOAD_ADDR), kernel, kernel_sz);
 
-	/* TODO add initrd */
+	if (!vaddr_null_range(vmm->guest_initrd)) {
+		u64 initrd_addr = LINUX_KERNEL_LOAD_ADDR + kernel_sz;
+		u64 initrd_sz = vmm->guest_initrd.end - vmm->guest_initrd.start;
+
+		memcpy((void *)(ram_start + initrd_addr),
+		       (void *)vmm->guest_initrd.start, initrd_sz);
+
+		boot_params->hdr.ramdisk_image = initrd_addr;
+		boot_params->hdr.ramdisk_size = initrd_sz;
+	}
 
 	struct vmcs_guest_register_state *state = &vmm->guest_state.reg_state;
 	state->regs.rsp = 0x400000;

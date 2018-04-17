@@ -378,8 +378,9 @@ static inline void vmcs_write_proc_based_ctrls2(struct vmm *vmm, u64 ctl)
 			   MSR_VMX_PROC_CTLS2);
 }
 
+#define EXCEPTION_UD	(1ull << 6)
 #define EXCEPTION_PF	(1ull << 14)
-#define EXCEPTION_BITMAP_MASK	~(EXCEPTION_PF)
+#define EXCEPTION_BITMAP_MASK	~(EXCEPTION_PF|EXCEPTION_UD)
 static void vmcs_write_vm_exec_controls(struct vmm *vmm)
 {
 	vmcs_write_pin_based_ctrls(vmm, 0);
@@ -403,7 +404,6 @@ static void vmcs_write_vm_exec_controls(struct vmm *vmm)
 	__vmwrite(CR4_READ_SHADOW, guest_cr4);
 	__vmwrite(CR4_GUEST_HOST_MASK, guest_cr4);
 
-	__vmwrite(CR4_READ_SHADOW, vmm->host_state.control_regs.cr4);
 	__vmwrite(EPT_POINTER, vmm->eptp.quad_word);
 }
 

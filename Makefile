@@ -8,7 +8,7 @@ QEMU=/usr/bin/qemu-system-x86_64
 	     -device ahci,id=ahci		\
 	     -device ide-drive,drive=disk,bus=ahci.0 \
 	     -serial stdio -m 4G
-QEMU_OPTS=-cdrom $(ISO) -serial stdio -m 4G
+QEMU_OPTS=-machine isapc -cdrom $(ISO) -serial stdio -m 4G
 
 INCLUDE_DIR = include/
 OBJS = src/boot.o 	\

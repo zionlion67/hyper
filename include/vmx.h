@@ -298,6 +298,8 @@ struct vaddr_range {
 	vaddr_t end;
 };
 
+#define vaddr_null_range(range) (range.start == 0 && range.end == 0) ? 1 : 0
+
 struct vmcs;
 struct vmm {
 	u64 vmx_msr[NR_VMX_MSR];
@@ -307,6 +309,7 @@ struct vmm {
 
 	struct vaddr_range guest_mem;
 	struct vaddr_range guest_img;
+	struct vaddr_range guest_initrd;
 
 	struct eptp eptp;
 	struct vmcs_host_state host_state;
