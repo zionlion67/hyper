@@ -1,6 +1,6 @@
+# TODO Recursive makefiles or equivalent, this is ...
 OUT_DIR ?= build
 KERNEL = $(OUT_DIR)/kernel
-GRUB_CFG = grub_default.cfg
 ISO = hyper.iso
 
 QEMU=/usr/bin/qemu-system-x86_64
@@ -44,14 +44,13 @@ DRIVER_OBJS=$(DRIVER_DIR)/ahci.o
 CC=gcc
 CPPFLAGS += -I$(INCLUDE_DIR) -I$(LIBC_DIR)/include #-DDEBUG
 CFLAGS += -Wall -Wextra -Werror -std=gnu99 -g3 -fno-stack-protector \
-	 -fno-builtin -ffreestanding -Wno-pointer-to-int-cast      \
-	 -Wno-int-to-pointer-cast -Wno-int-conversion -fno-plt
+	 -fno-builtin -ffreestanding -Wno-int-conversion -fno-plt
 
 ASFLAGS += -g3
 LDFLAGS = -n -T $(LDSCRIPT) -nostdlib -static
 LDSCRIPT = src/hyper.lds
 
-.PHONY: all clean run
+.PHONY: all clean run debug
 
 all: $(ISO)
 
