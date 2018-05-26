@@ -1,15 +1,17 @@
 #include <page.h>
 #include <stdio.h>
 
-/*
- * Simple page frame allocator.
- */
-
 static DECLARE_LIST(frame_free_list);
 
 #define MAX_MEMORY_ZONES 20
-static struct mem_zone memory_map[MAX_MEMORY_ZONES];
-static u8 mem_zone_cnt = 0;
+struct memory_map {
+	struct mem_zone zones[MAX_MEMORY_ZONES];
+	u8 zone_cnt;
+};
+
+static struct memory_map memory_map = {
+	.zone_cnt = 0,
+};
 
 /* Start and End address of the frame array */
 static struct page_frame *first_frame;
@@ -24,6 +26,7 @@ u64 last_pfn;
 extern char _start[];
 extern char _end[];
 
+#define LOW_MEM_END 	(1 << 20)
 #define _2M_PAGE_SIZE	(2 * BIG_PAGE_SIZE)
 
 /* ATM only get available regions */
@@ -33,27 +36,32 @@ static void init_memory_map(struct multiboot_tag_mmap *mmap)
 	u64 end = (u64)mmap + mmap->size;
 
 	for (; (u64)m < end; m = (void *)((u8 *)m + mmap->entry_size)) {
-		struct mem_zone *zone = &memory_map[mem_zone_cnt];
+		struct mem_zone *zone = &memory_map.zones[memory_map.zone_cnt];
 		if (m->type != MULTIBOOT_MEMORY_AVAILABLE)
 			continue;
 		zone->start = m->addr;
 		zone->length = m->len;
 		zone->type = MEM_RAM_USABLE;
 
-		if (zone->start + zone->length < BIG_PAGE_SIZE)
+		if (zone->start + zone->length < LOW_MEM_END)
 			zone->type |= MEM_LOW_MEM;
 
-		mem_zone_cnt++;
+		memory_map.zone_cnt++;
 	}
+}
+
+static inline int mem_is_usable(const u8 type)
+{
+	return type & MEM_RAM_USABLE;
 }
 
 static paddr_t first_valid_paddr(void)
 {
 	paddr_t res = MAX_PHYS_ADDR;
-	for (u8 i = 0; i < mem_zone_cnt; ++i) {
-		struct mem_zone tmp = memory_map[i];
-		if ((tmp.type & MEM_RAM_USABLE) && tmp.start < res)
-			res = tmp.start;
+	for (u8 i = 0; i < memory_map.zone_cnt; ++i) {
+		const struct mem_zone *tmp = &memory_map.zones[i];
+		if (mem_is_usable(tmp->type) && tmp->start < res)
+			res = tmp->start;
 	}
 	return res;
 }
@@ -61,20 +69,20 @@ static paddr_t first_valid_paddr(void)
 static paddr_t last_valid_paddr(void)
 {
 	paddr_t res = 0;
-	for (u8 i = 0; i < mem_zone_cnt; ++i) {
-		struct mem_zone tmp = memory_map[i];
-		if ((tmp.type & MEM_RAM_USABLE) && tmp.start + tmp.length > res)
-			res = tmp.start + tmp.length;
+	for (u8 i = 0; i < memory_map.zone_cnt; ++i) {
+		const struct mem_zone *tmp = &memory_map.zones[i];
+		if (mem_is_usable(tmp->type) && tmp->start + tmp->length > res)
+			res = tmp->start + tmp->length;
 	}
 	return res;
 }
 
 static u8 paddr_mem_flags(paddr_t paddr)
 {
-	for (u8 i = 0; i < mem_zone_cnt; ++i) {
-		struct mem_zone tmp = memory_map[i];
-		if (paddr >= tmp.start && paddr < tmp.start + tmp.length)
-			return tmp.type;
+	for (u8 i = 0; i < memory_map.zone_cnt; ++i) {
+		const struct mem_zone *tmp = &memory_map.zones[i];
+		if (paddr >= tmp->start && paddr < tmp->start + tmp->length)
+			return tmp->type;
 	}
 	return MEM_RESERVED;
 }
