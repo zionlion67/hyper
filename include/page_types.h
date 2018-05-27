@@ -57,11 +57,22 @@ typedef unsigned gfp_t;
 
 #define MAX_PHYS_ADDR		(0xffffffffffffffffUL)
 
-#define PAGE_OFFSET 		0xffffffff80000000UL
+/*
+ * Start of kernel text mapping from phys addr 0.
+ * All addresses above PAGE_OFFSET are canonical.
+ */
+#define PAGE_OFFSET 		0xffffffff80000000ULL
+
+/* 4G Physical memory map */
+#define PHYS_MAP_START		0xffffff8000000000ULL
+#define PHYS_MAP_END		(PHYS_MAP_START + (4ULL << 30))
 
 #define FRAMES_PER_2M_PAGE	((2 * BIG_PAGE_SIZE) / PAGE_SIZE)
 
-#define pg_present(p)	((pte_t)p & PG_PRESENT)
-#define pg_huge_page(p)	((pte_t)p & PG_HUGE_PAGE)
+#define pg_present(p)		((pte_t)p & PG_PRESENT)
+#define pg_huge_page(p)		((pte_t)p & PG_HUGE_PAGE)
+
+#define PTE_RW_HUGE		(PG_PRESENT|PG_WRITABLE|PG_HUGE_PAGE)
+#define pte_rw_huge(va)		((pte_t)va | PTE_RW_HUGE)
 
 #endif /* !_PAGE_TYPES_H */

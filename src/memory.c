@@ -27,7 +27,7 @@ void *alloc_pages(u64 n)
 	if (off > PTRS_PER_TABLE - n)
 		return NULL;
 
-	struct page_frame *f = alloc_page_frames(pmd + off, n * FRAMES_PER_2M_PAGE);
+	struct page_frame *f = alloc_page_frames(n * FRAMES_PER_2M_PAGE);
 	if (f == NULL)
 		return NULL;
 

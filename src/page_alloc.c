@@ -1,3 +1,4 @@
+#include <compiler.h>
 #include <page.h>
 #include <stdio.h>
 
@@ -13,18 +14,16 @@ static struct memory_map memory_map = {
 	.zone_cnt = 0,
 };
 
-/* Start and End address of the frame array */
-static struct page_frame *first_frame;
-static struct page_frame *last_frame;
-/* Physical address of the first frame */
-static paddr_t first_frame_paddr;
+struct frame_state {
+	struct page_frame *begin;	/* Start of the frame array */
+	struct page_frame *end;		/* End of the frame array */
+	u64 last_pfn;			/* Last valid page frame number */
+};
 
-/* Last valid page frame number */
-u64 last_pfn;
+static struct frame_state frame_state;
 
-/* Kernel start/end vaddr */
+/* Kernel start */
 extern char _start[];
-extern char _end[];
 
 #define LOW_MEM_END 	(1 << 20)
 #define _2M_PAGE_SIZE	(2 * BIG_PAGE_SIZE)
@@ -77,7 +76,7 @@ static paddr_t last_valid_paddr(void)
 	return res;
 }
 
-static u8 paddr_mem_flags(paddr_t paddr)
+static u8 paddr_mem_type(paddr_t paddr)
 {
 	for (u8 i = 0; i < memory_map.zone_cnt; ++i) {
 		const struct mem_zone *tmp = &memory_map.zones[i];
@@ -87,55 +86,84 @@ static u8 paddr_mem_flags(paddr_t paddr)
 	return MEM_RESERVED;
 }
 
-paddr_t page_to_phys(struct page_frame *frame)
+/* Setup 4G physical memory map starting from virtual addr PHYS_MAP_START */
+static void setup_phys_map(void)
 {
-	if (frame < first_frame || frame > last_frame)
-		return (paddr_t)-1;
-	paddr_t paddr = (paddr_t)(frame - first_frame);
-	return (paddr << PAGE_SHIFT) + first_frame_paddr;
+	pud_t *pud = kernel_pud();
+	for (vaddr_t va = PHYS_MAP_START; va < PHYS_MAP_END; va += (1 << 30))
+		pud[pud_offset(va)] = pte_rw_huge(virt_to_phys(va));
 }
 
-struct page_frame *phys_to_page(paddr_t addr)
+static void init_frame_state(struct frame_state *state, vaddr_t mod_end)
 {
-	return &first_frame[(addr - first_frame_paddr) >> PAGE_SHIFT];
+	const paddr_t first_paddr = __align(first_valid_paddr(), PAGE_SIZE);
+	const paddr_t last_paddr = __align(last_valid_paddr(), PAGE_SIZE);
+	const u64 nb_frames = (last_paddr - first_paddr) / PAGE_SIZE;
+
+	/* Use PHYS_MAP mapping for the frame array */
+	state->begin = (struct page_frame *)phys_to_virt(virt_to_phys(mod_end));
+	state->end = state->begin + nb_frames;
+	state->last_pfn = nb_frames - 1;
 }
 
-struct page_frame *pfn_to_page(u64 pfn)
+paddr_t page_to_phys(const struct page_frame *frame)
 {
-	return first_frame + pfn;
+	return (frame - frame_state.begin) << PAGE_SHIFT;
 }
 
-static void set_frames_used(struct page_frame *start, struct page_frame *end,
-			    vaddr_t vaddr)
+struct page_frame *phys_to_page(const paddr_t paddr)
 {
-	for (struct page_frame *tmp = start; tmp < end; ++tmp) {
-		tmp->vaddr = vaddr;
-		list_remove(&tmp->free_list);
-		vaddr += PAGE_SIZE;
+	return frame_state.begin + (paddr >> PAGE_SHIFT);
+}
+
+static inline void init_page_frame(struct page_frame *f)
+{
+	list_init(&f->free_list);
+	f->vaddr = (vaddr_t)NULL;
+}
+
+static inline int paddr_is_reserved(const paddr_t paddr)
+{
+	return (paddr >= virt_to_phys(_start)
+		&& paddr < virt_to_phys(frame_state.end));
+}
+
+static void setup_frame_state(vaddr_t mod_end)
+{
+	struct frame_state *state = &frame_state;
+	init_frame_state(state, mod_end);
+
+	for (struct page_frame *f = state->begin; f < state->end; ++f) {
+		init_page_frame(f);
+		const paddr_t paddr = page_to_phys(f);
+		if (!mem_is_usable(paddr_mem_type(paddr)))
+			continue;
+		if (!paddr_is_reserved(paddr))
+			list_add(&frame_free_list, &f->free_list);
 	}
-
 }
 
 #define PAGE_FRAME_ENTRY(l)	list_entry((l), struct page_frame, free_list)
-
 /* Very dummy allocator */
-/* Allocates n contiguous page frames */
-struct page_frame *alloc_page_frames(vaddr_t vaddr, u64 nb_frame)
+/* Try to allocates `nb_frames` contiguous frames */
+struct page_frame *alloc_page_frames(u64 nb_frames)
 {
 	struct list *l;
 	list_for_each_reverse(&frame_free_list, l) {
 		struct page_frame *start = PAGE_FRAME_ENTRY(l);
 		struct page_frame *end;
-		u64 n = nb_frame;
-		for (end = start; end < last_frame && n > 0; ++end, --n) {
-			/* frame isn't free */
+		u64 n = nb_frames;
+		for (end = start; end < frame_state.end && n > 0; ++end, --n)
 			if (list_empty(&end->free_list))
 				break;
-		}
+		/* No contigous frames found */
 		if (n > 0)
 			continue;
-		/* we found contigous frames */
-		set_frames_used(start, end, vaddr);
+
+		/* Remove frames from free list */
+		for (struct page_frame *f = start; f < end; ++f)
+			list_remove(&f->free_list);
+
 		return start;
 	}
 	return NULL;
@@ -143,68 +171,15 @@ struct page_frame *alloc_page_frames(vaddr_t vaddr, u64 nb_frame)
 
 void release_page_frames(struct page_frame *f, u64 n)
 {
-	for (u64 i = 0; i < n; ++i) {
-		f[i].vaddr = (vaddr_t)NULL;
+	for (u64 i = 0; i < n; ++i)
 		list_add(&frame_free_list, &f[i].free_list);
-	}
 }
 
-static inline void init_pmd_flat(pmd_t *pmd)
-{
-	*pmd = (*(pmd - 1) + _2M_PAGE_SIZE) & ~(PG_ACCESSED|PG_DIRTY);
-}
-
-/* Build page frame array and init free frames list */
-/* TODO rewrite all this shit */
-int memory_init(struct multiboot_tag_mmap *mmap, vaddr_t first_frame_addr)
+int memory_init(struct multiboot_tag_mmap *mmap, vaddr_t mod_end)
 {
 	init_memory_map(mmap);
+	setup_phys_map();
+	setup_frame_state(mod_end);
 
-	/* Physically valid addresses */
-	paddr_t first_paddr = first_valid_paddr();
-	paddr_t last_paddr = last_valid_paddr();
-	first_frame_paddr = first_paddr;
-
-	/* number of 4K frames */
-	u64 frame_count = (last_paddr - first_paddr) / PAGE_SIZE;
-
-	/* the frame array is located just after the last multiboot module  */
-	first_frame = (void *)first_frame_addr;
-	last_frame = first_frame + frame_count;
-
-	pmd_t *pmd = kernel_pmd();
-
-	u64 cnt;
-	u16 first_frame_off = pmd_offset(first_frame_addr);
-	/* Map all up to first frame pmd offset */
-	for (cnt = 1; cnt < PTRS_PER_TABLE - 1 && cnt + 1 < first_frame_off; ++cnt) {
-		if (!pg_present(pmd[cnt + 1]))
-			init_pmd_flat(pmd + cnt + 1);
-	}
-
-	/* Last address currently mapped + 1 */
-	paddr_t end = (pmd[cnt] & PAGE_MASK) + _2M_PAGE_SIZE;
-	u64 last_frame_off = pmd_offset((vaddr_t)last_frame);
-	/* Virtual addresses below this will not be allocatable */
-	paddr_t reserved_end = end + (last_frame_off - cnt) * _2M_PAGE_SIZE;
-
-	cnt = 0;
-	for (struct page_frame *f = first_frame; f < last_frame; ++f) {
-		u64 pmd_off = pmd_offset((vaddr_t)f + sizeof(struct page_frame));
-		if (!pg_present(pmd[pmd_off]))
-			init_pmd_flat(pmd + pmd_off);
-
-		const paddr_t paddr = page_to_phys(f);
-		list_init(&f->free_list);
-		if (!(paddr_mem_flags(paddr) & MEM_RAM_USABLE))
-			continue;
-
-		f->vaddr = (vaddr_t)NULL;
-		/* don't add physical memory used by kernel and frame array */
-		if (paddr < virt_to_phys(_start) || paddr >= reserved_end)
-			list_add(&frame_free_list, &f->free_list);
-		cnt++;
-	}
-	last_pfn = cnt - 1;
 	return 0;
 }

@@ -109,7 +109,7 @@ void hyper_main(u32 magic, u32 info_addr)
 	if (!multiboot2_valid(magic, info_addr))
 		panic("Invalid multiboot informations\n");
 
-	vaddr_t mbi_addr = phys_to_virt(info_addr);
+	vaddr_t mbi_addr = va(info_addr);
 	struct multiboot_tag_mmap *mmap = get_multiboot_infos(mbi_addr,
 					  MULTIBOOT_TAG_TYPE_MMAP);
 	if (!mmap)
@@ -124,11 +124,10 @@ void hyper_main(u32 magic, u32 info_addr)
 #ifdef DEBUG
 	dump_memory_map(mmap);
 #endif
-
 	init_idt();
 	load_tss();
 
-	memory_init(mmap, phys_to_virt(mod->mod_end));
+	memory_init(mmap, va(mod->mod_end));
 	init_kmalloc();
 
 	pci_register_drivers();
