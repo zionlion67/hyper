@@ -67,8 +67,7 @@ typedef unsigned gfp_t;
 #define PHYS_MAP_START		0xffffff8000000000ULL
 #define PHYS_MAP_END		(PHYS_MAP_START + (4ULL << 30))
 
-#define FRAMES_PER_2M_PAGE	((2 * BIG_PAGE_SIZE) / PAGE_SIZE)
-
+#define HUGE_PAGE_SIZE		(2 << 20)
 #define pg_present(p)		((pte_t)p & PG_PRESENT)
 #define pg_huge_page(p)		((pte_t)p & PG_HUGE_PAGE)
 

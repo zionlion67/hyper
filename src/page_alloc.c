@@ -183,3 +183,37 @@ int memory_init(struct multiboot_tag_mmap *mmap, vaddr_t mod_end)
 
 	return 0;
 }
+
+static inline u64 frames_per_page(u8 flags)
+{
+	return flags & PG_HUGE_PAGE ? 512 : 1;
+}
+
+/* Allocate `nb_pages` pages (4K or 2M) */
+static void *__alloc_pages(u64 nb_pages, u8 flags)
+{
+	u64 nb_frames = frames_per_page(flags);
+	
+	/* Try to alloc contiguous physical memory */
+	struct page_frame *frames = alloc_page_frames(nb_pages * nb_frames);
+
+	if (frames != NULL)
+		return phys_to_virt(page_to_phys(frames));
+	return NULL;
+}
+
+void *alloc_huge_pages(u64 nb)
+{
+	return __alloc_pages(nb, PG_HUGE_PAGE);
+}
+
+void *alloc_pages(u64 nb)
+{
+	return __alloc_pages(nb, 0);
+}
+
+void release_pages(void *p, u64 n)
+{
+	struct page_frame *f = phys_to_page(virt_to_phys(p));
+	release_page_frames(f, n);
+}

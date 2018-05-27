@@ -68,20 +68,7 @@ static inline pmd_t *kernel_pmd(void)
 {
 	const pud_t *pud = kernel_pud();
 	const u64 off = pud_offset(PAGE_OFFSET);
-	return (pmd_t *)phys_to_virt(pud[off] & PAGE_MASK);
-}
-
-static inline void map_frames(pmd_t *pmd, struct page_frame *f, u64 n, u32 flags)
-{
-	for (u64 i = 0; i < n; ++i, f += FRAMES_PER_2M_PAGE) {
-		pmd[i] = page_to_phys(f);
-		pmd[i] |= flags;
-	}
-}
-
-static inline void map_frame(pmd_t *pmd, struct page_frame *f, u32 flags)
-{
-	map_frames(pmd, f, 1, flags);
+	return (pmd_t *)va(pud[off] & PAGE_MASK);
 }
 
 static inline struct page_frame *alloc_page_frame(void)

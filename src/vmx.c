@@ -49,14 +49,10 @@ static inline void vmm_read_vmx_msrs(struct vmm *vmm)
 
 static int alloc_vmcs(struct vmm *vmm)
 {
-	/*
-	 * Ugly hack to avoid wasting too much memory without modifying
-	 * the 2mb page allocator.
-	 */
-	void *mem = alloc_page();
+	void *mem = alloc_pages(2);
 	if (mem == NULL)
 		return 1;
-	memset(mem, 0, ALLOC_PAGE_SIZE);
+	memset(mem, 0, 2 * PAGE_SIZE);
 	vmm->vmx_on = mem;
 	vmm->vmcs = (vaddr_t)mem + PAGE_SIZE;
 	return 0;
@@ -64,7 +60,7 @@ static int alloc_vmcs(struct vmm *vmm)
 
 static inline void release_vmcs(struct vmcs *vmcs)
 {
-	release_page(vmcs);
+	release_huge_page(vmcs);
 }
 
 /* Write back caching */
@@ -73,8 +69,8 @@ static inline void release_vmcs(struct vmcs *vmcs)
 static void setup_eptp(struct eptp *eptp, struct ept_pml4e *ept_pml4)
 {
 	eptp->quad_word = 0;
-	eptp->type = EPT_MEMORY_TYPE_WB;
-	eptp->page_walk_length = 3;
+	eptp->type = EPT_MEMORY_TYPE_WB; /* imposed by KVM */
+	eptp->page_walk_length = 3;	 /* same */
 	eptp->enable_dirty_flag = 0;
 	eptp->pml4_addr = virt_to_phys(ept_pml4) >> PAGE_SHIFT;
 }
@@ -87,41 +83,33 @@ static inline void ept_set_pte_rwe(void *ept_pte)
 	pte->kern_exec = 1;
 }
 
-#define _1GB (1024 * 1024 * 1024)
-#define _2MB (2 << 20)
-
-
-//TODO add nb page
-static void ept_init_pt(struct ept_pte *ept_pte, paddr_t host_addr,
-			 paddr_t guest_addr)
+static inline void ept_init_default(void *ept_pte, paddr_t paddr)
 {
-	u16 pte_off = pte_offset(guest_addr);
-	for (u16 i = 0; pte_off < EPT_PTRS_PER_TABLE; ++pte_off, ++i) {
-		struct ept_pte *pte = ept_pte + pte_off;
-		ept_set_pte_rwe(pte);
-		pte->memory_type = EPT_MEMORY_TYPE_WB;
-		pte->ignore_pat = 1;
-		pte->paddr = (host_addr + i * PAGE_SIZE) >> PAGE_SHIFT;
+	ept_set_pte_rwe(ept_pte);
+	struct ept_pte *pte = ept_pte;
+	pte->paddr = paddr >> PAGE_SHIFT;
+}
+
+static void ept_init_pt(struct ept_pte *ept_pt, paddr_t host, paddr_t guest)
+{
+	u16 pte_off = pte_offset(guest);
+	for (; pte_off < EPT_PTRS_PER_TABLE; ++pte_off, host += PAGE_SIZE) {
+		struct ept_pte *cur_pte = ept_pt + pte_off;	
+		ept_set_pte_rwe(cur_pte);
+		cur_pte->memory_type = EPT_MEMORY_TYPE_WB;
+		cur_pte->ignore_pat = 1;
+		cur_pte->paddr = host >> PAGE_SHIFT; 
 	}
 }
 
-static int ept_alloc_set_pgtables(struct ept_pde *ept_pde, paddr_t host_addr,
-				  paddr_t guest_addr, u16 nb_entries)
+static u64 needed_paging_structs(const u64 mem_size, const u64 mapped_size)
 {
-	vaddr_t pgtable_vaddr = (vaddr_t)alloc_page();
-	if ((void *)pgtable_vaddr == NULL)
+	u64 n = mem_size / mapped_size;
+	if (n == 0)
 		return 1;
-
-	u16 pmd_off = pmd_offset(guest_addr);
-	for (u16 i = 0; i < nb_entries && pmd_off + i < EPT_PTRS_PER_TABLE; ++i) {
-		struct ept_pde *cur_pde = ept_pde + pmd_off + i;
-		ept_set_pte_rwe(cur_pde);
-		struct ept_pte *pt = (void *)(pgtable_vaddr + i * PAGE_SIZE);
-		ept_init_pt(pt, host_addr + i * _2MB, guest_addr);
-		cur_pde->paddr = virt_to_phys(pt) >> PAGE_SHIFT;
-	}
-
-	return 0;
+	if (mem_size % mapped_size != 0)
+		n += 1;
+	return n;
 }
 
 /*
@@ -132,67 +120,84 @@ static int ept_alloc_set_pgtables(struct ept_pde *ept_pde, paddr_t host_addr,
 static int ept_setup_range(struct vmm *vmm, paddr_t host_start,
 			    paddr_t host_end, paddr_t guest_start)
 {
-	/*
-	 * vmx_on and vmcs are stored on a 2MB page ...
-	 * There is 2MB - 8KB of space left for EPT structures.
-	 */
-	struct ept_pml4e *ept_pml4 = (vaddr_t)vmm->vmx_on + 2 * PAGE_SIZE;
-	struct ept_pdpte *ept_pdpt = (vaddr_t)ept_pml4 + PAGE_SIZE;
-	struct ept_pde *ept_pde = (vaddr_t)ept_pdpt + PAGE_SIZE;
-
-	struct ept_pml4e *pml4e = ept_pml4 + pgd_offset(guest_start);
-	ept_set_pte_rwe(pml4e);
-	pml4e->paddr = virt_to_phys(ept_pdpt) >> PAGE_SHIFT;
-
-	struct ept_pdpte *pdpte = ept_pdpt + pud_offset(guest_start);
-	ept_set_pte_rwe(pdpte);
-
-	/* compute how much EPT PD we can store without allocating a new page */
-	u64 max_pd = (ALLOC_PAGE_SIZE - ((vaddr_t)ept_pde - (vaddr_t)vmm->vmx_on))
-		      / PAGE_SIZE;
-
-	/* one page directory maps 1GB of RAM */
-	u64 needed_pd = (host_end - host_start) / _1GB;
-	if (!needed_pd)
-		needed_pd = 1;
-	if (needed_pd > max_pd)
+	const u64 mmap_size = host_end - host_start;
+	if (mmap_size > GB(512))
 		return 1;
 
-	/* one page table maps 2MB of RAM */
-	u16 needed_pgtable = (host_end - host_start) / _2MB;
-	for (u64 i = 0; i < needed_pd; ++i, ++pdpte) {
-		struct ept_pde *cur_pde = (vaddr_t)ept_pde + i * PAGE_SIZE;
-		ept_set_pte_rwe(cur_pde);
-		pdpte->paddr = virt_to_phys(cur_pde) >> PAGE_SHIFT;
+	struct ept_pml4e *ept_pml4 = alloc_page();
+	if (ept_pml4 == NULL)
+		return 1;
+	struct ept_pdpte *ept_pdpt = alloc_page();
+	if (ept_pdpt == NULL)
+		goto free_pml4;
 
-		u16 nb_pgtable = EPT_PTRS_PER_TABLE;
-		if (i == needed_pd - 1)
-			nb_pgtable = needed_pgtable - i * EPT_PTRS_PER_TABLE;
 
-		if (ept_alloc_set_pgtables(cur_pde, host_start, guest_start,
-					   nb_pgtable)) {
-			return 1;
+	/* Init pml4 with pdpt physical address */
+	struct ept_pml4e *pml4e = ept_pml4 + pgd_offset(guest_start);
+	ept_init_default(pml4e, virt_to_phys(ept_pdpt));
+
+	/* Make ept_pdpt point to the first entry we fill */
+	const u64 pdpt_off = pud_offset(guest_start);
+	ept_pdpt += pdpt_off;
+
+	const u64 needed_pd = needed_paging_structs(mmap_size, GB(1));
+	u64 needed_pt = needed_paging_structs(mmap_size, MB(2));
+	if (pdpt_off + needed_pd >= EPT_PTRS_PER_TABLE)
+		goto free_pdpt;
+	
+	struct ept_pde *ept_pd = alloc_pages(needed_pd);
+	if (ept_pd == NULL)
+		goto free_pdpt;
+	struct ept_pte *ept_pt = alloc_pages(needed_pt);
+	if (ept_pt == NULL)
+		goto free_pd;
+
+	memset(ept_pd, 0, needed_pd * PAGE_SIZE);
+	memset(ept_pt, 0, needed_pt * PAGE_SIZE);
+
+	/* Init PDPT */
+	for (u64 i = 0; i < needed_pd; ++i) {
+		struct ept_pde *cur_pd = (vaddr_t)ept_pd + i * PAGE_SIZE;
+		ept_init_default(ept_pdpt + i, virt_to_phys(cur_pd));
+
+		/* Init page directory */
+		for (u64 j = 0; j < EPT_PTRS_PER_TABLE && j < needed_pt; ++j) {
+			struct ept_pde *pde = cur_pd + pmd_offset(guest_start);
+			struct ept_pte *pt = (vaddr_t)ept_pt + j * PAGE_SIZE;
+			ept_init_default(pde, virt_to_phys(pt));
+
+			/* Init page table for current page dir entry */
+			ept_init_pt(pt, host_start, guest_start);
+
+			host_start += MB(2);
+			guest_start += MB(2);
 		}
 
-		host_start += nb_pgtable * _2MB;
-		guest_start += nb_pgtable * _2MB;
+		needed_pt -= EPT_PTRS_PER_TABLE;
 	}
 
 	setup_eptp(&vmm->eptp, ept_pml4);
-
 	return 0;
+
+free_pd:
+	release_pages(ept_pd, needed_pd);
+free_pdpt:
+	release_page(ept_pdpt);
+free_pml4:
+	release_page(ept_pml4);
+	return 1;
 }
 
 /* XXX: ATM allocates 200M of memory for the VM */
 static int setup_ept(struct vmm *vmm)
 {
 	u8 nb_pages = 100;
-	void *p = alloc_pages(nb_pages);
+	void *p = alloc_huge_pages(nb_pages);
 	if (p == NULL)
 		return 1;
 
 	paddr_t start = virt_to_phys(p);
-	paddr_t end = start + nb_pages * ALLOC_PAGE_SIZE;
+	paddr_t end = start + nb_pages * HUGE_PAGE_SIZE;
 	if (ept_setup_range(vmm, start, end, 0))
 		return 1;
 	vmm->guest_mem.start = p;
@@ -392,9 +397,7 @@ static void vmcs_write_vm_exec_controls(struct vmm *vmm)
 	vmcs_write_proc_based_ctrls2(vmm, proc_flags2);
 
 	__vmwrite(EXCEPTION_BITMAP, EXCEPTION_BITMAP_MASK);
-
-	paddr_t addr = virt_to_phys(__align_n((u64)vmm->msr_bitmap, PAGE_SIZE));
-	__vmwrite(MSR_BITMAP, addr);
+	__vmwrite(MSR_BITMAP, virt_to_phys((vaddr_t)vmm->msr_bitmap));
 
 	u64 guest_cr0 = vmm->guest_state.reg_state.control_regs.cr0;
 	__vmwrite(CR0_READ_SHADOW, guest_cr0);
@@ -553,15 +556,12 @@ static inline void vmcs_write_vm_guest_state(struct vmm *vmm)
 #define MSR_BITMAP_WRITE_LO	(MSR_BITMAP_READ_HI + MSR_BITMAP_SZ)
 #define MSR_BITMAP_WRITE_HI	(MSR_BITMAP_WRITE_LO + MSR_BITMAP_SZ)
 
-/* Yet another ugly hack ... */
 static int init_msr_bitmap(struct vmm *vmm)
 {
-	vmm->msr_bitmap = kmalloc(MSR_ALL_BITMAP_SZ * 2);
-	if (vmm->msr_bitmap == NULL)
-		return 1;
-
-	memset(vmm->msr_bitmap, 0, MSR_ALL_BITMAP_SZ * 2);
-	return 0;
+	vmm->msr_bitmap = alloc_page();
+	if (vmm->msr_bitmap != NULL)
+		memset(vmm->msr_bitmap, 0, MSR_ALL_BITMAP_SZ);
+	return vmm->msr_bitmap == NULL;
 }
 
 /* Hack to launch linux with correct reg state, this is really ugly. */
@@ -661,7 +661,7 @@ int vmm_init(struct vmm *vmm)
 free_vmxoff:
 	__vmxoff();
 free_msr:
-	kfree(vmm->msr_bitmap);
+	release_page(vmm->msr_bitmap);
 free_host:
 	kfree((void *)(vmm->host_state.rsp - VM_EXIT_STACK_SIZE));
 free_vmcs:

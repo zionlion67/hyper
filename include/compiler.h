@@ -21,6 +21,8 @@
 #define container_of(addr, type, field) \
 	((type *)((char *)addr - offsetof(type, field)))
 
-#define ERR_PTR(x) ((void *)x)
+#define KB(x) ((u64)x << 10)
+#define MB(x) ((u64)x << 20)
+#define GB(x) ((u64)x << 30)
 
-#endif
+#endif /* !_COMPILER_H_ */

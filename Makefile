@@ -17,7 +17,6 @@ OBJS = src/boot.o 	\
        src/isr.o	\
        src/interrupts.o \
        src/page_alloc.o \
-       src/memory.o	\
        src/kmalloc.o	\
        src/tss.o	\
        src/vmx.o	\

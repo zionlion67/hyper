@@ -1,7 +1,7 @@
 #include <page.h>
 #include <memory.h>
 
-#define ARENA_SIZE ALLOC_PAGE_SIZE
+#define ARENA_SIZE HUGE_PAGE_SIZE
 
 #define CHUNK_SIZE(sz) (sz + sizeof(struct mem_chunk))
 
@@ -87,11 +87,11 @@ void *kmalloc(u64 size)
 
 	/* We found no available memory on existing arenas */
 	u64 nb_page = (sizeof(struct mem_arena) + CHUNK_SIZE(size))
-		      / ALLOC_PAGE_SIZE + 1;
+		      / ARENA_SIZE + 1;
 	/* out of memory */
 	if ((arena = alloc_pages(nb_page)) == NULL)
 		return NULL;
-	init_arena(arena, nb_page * ALLOC_PAGE_SIZE);
+	init_arena(arena, nb_page * ARENA_SIZE);
 	struct mem_chunk *chk = arena_allocate_chunk(arena, size);
 	return (void *)(chk + 1);
 }
@@ -107,7 +107,7 @@ void kfree(void *p)
 
 int init_kmalloc(void)
 {
-	struct mem_arena *first_arena = alloc_page();
+	struct mem_arena *first_arena = alloc_huge_page();
 	if (first_arena == NULL)
 		return 1;
 	init_arena(first_arena, ARENA_SIZE);
