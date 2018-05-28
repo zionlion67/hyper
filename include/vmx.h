@@ -14,6 +14,7 @@
 #define VM_EXEC_ENABLE_PROC_CTLS2		(1 << 31)
 #define VM_EXEC_ENABLE_EPT			(1 << 1)
 #define VM_EXEC_UNRESTRICTED_GUEST		(1 << 7)
+#define VM_EXEC_UNCONDITIONAL_IO_EXIT		(1 << 24)
 
 /* VM Exit control fields */
 #define VM_EXIT_SAVE_DBG_CTLS			(1 << 2)

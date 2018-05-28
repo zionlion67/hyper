@@ -1,5 +1,6 @@
 #include <cpuid.h>
 
+#include <io.h>
 #include <interrupts.h>
 #include <page.h>
 #include <panic.h>
@@ -444,6 +445,79 @@ static void cr_access_handler(struct vmm *vmm, struct vm_exit_ctx *ctx)
 	}
 }
 
+struct io_access_info {
+	union {
+		struct {
+			u64	access_sz : 3;
+			u64	in        : 1;
+			u64	string    : 1;
+			u64	rep_insn  : 1;
+			u64	imm_op    : 1;
+			u64	res1      : 9;
+			u64	port      : 16;
+			u64	res2      : 32;
+		};
+		u64	quad_word;
+	};
+} __packed;
+
+static void log_io_access(struct io_access_info *info)
+{
+	printf("I/O access: ");
+
+	const char *rep = info->rep_insn ? "rep" : "";
+	const char *insn = info->in ? "in" : "out";
+	char size[3] = { 0, 0, 0, };
+	u8 size_idx = 0;
+
+	if (info->string)
+		size[size_idx++] = 's';
+	if (info->access_sz == 0)
+		size[size_idx] = 'b';
+	if (info->access_sz == 1)
+		size[size_idx] = 'w';
+	if (info->access_sz == 3)
+		size[size_idx]= 'l';
+
+	printf("%s %s%s 0x%x\n", rep, insn, size, info->port);
+}
+
+static void io_access_handler(struct vmm *vmm __unused, struct vm_exit_ctx *ctx)
+{
+	struct io_access_info info = {
+		.quad_word = ctx->exit_qual,
+	};
+
+	const u16 port = info.port;
+
+	if ((0x3ff < port || port < 0x3f8)
+	     && (port != 0x20 && port != 0x21 && port != 0xa0 && port != 0xa1)
+	     && (port != 0x64 && port != 0x60 && port != 0x70 && port != 0x71))
+	{
+		log_io_access(&info);
+		//return;
+	}
+
+	if (info.string || info.rep_insn)
+		panic("Unhandled I/O string instruction\n");
+
+	if (!info.in) {
+		if (info.access_sz == 0)
+			outb(port, ctx->regs.rax & 0xff);
+		else if (info.access_sz == 1)
+			outw(port, ctx->regs.rax & 0xffff);
+		else
+			outl(port, ctx->regs.rax & 0xffffffff);
+	} else {
+		if (info.access_sz == 0)
+			ctx->regs.rax = inb(port);
+		else if (info.access_sz == 1)
+			ctx->regs.rax = inw(port);
+		else
+			ctx->regs.rax = inl(port);
+	}
+}
+
 static inline void read_guest_control_regs(struct control_regs *regs)
 {
 	__vmread(GUEST_CR0, &regs->cr0);
@@ -493,7 +567,7 @@ static void read_guest_msrs(struct vmcs_state_msr *msr)
 
 static void read_guest_reg_state(struct vmcs_guest_register_state *state)
 {
-	read_guest_control_regs(&state->control_regs);	
+	read_guest_control_regs(&state->control_regs);
 	read_guest_seg_descs(&state->seg_descs);
 	read_guest_table_regs(state);
 	read_guest_msrs(&state->msr);
@@ -541,12 +615,14 @@ static void __used vm_exit_dispatch(struct vmm *vmm, struct vm_exit_ctx *ctx)
 #define INTR_OR_NMI_EXIT_NO	0
 #define CPUID_EXIT_NO		10
 #define MOV_CR_EXIT_NO		28
+#define IO_EXIT_NO		30
 #define EPT_VIOLATION_EXIT_NO	48
 int init_vm_exit_handlers(struct vmm *vmm __maybe_unused)
 {
 	add_vm_exit_handler(INTR_OR_NMI_EXIT_NO, exception_handler);
 	add_vm_exit_handler(CPUID_EXIT_NO, cpuid_exit_handler);
 	add_vm_exit_handler(MOV_CR_EXIT_NO, cr_access_handler);
+	add_vm_exit_handler(IO_EXIT_NO, io_access_handler);
 	add_vm_exit_handler(EPT_VIOLATION_EXIT_NO, ept_violation_handler);
 	return 0;
 }

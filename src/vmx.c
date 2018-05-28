@@ -94,11 +94,11 @@ static void ept_init_pt(struct ept_pte *ept_pt, paddr_t host, paddr_t guest)
 {
 	u16 pte_off = pte_offset(guest);
 	for (; pte_off < EPT_PTRS_PER_TABLE; ++pte_off, host += PAGE_SIZE) {
-		struct ept_pte *cur_pte = ept_pt + pte_off;	
+		struct ept_pte *cur_pte = ept_pt + pte_off;
 		ept_set_pte_rwe(cur_pte);
 		cur_pte->memory_type = EPT_MEMORY_TYPE_WB;
 		cur_pte->ignore_pat = 1;
-		cur_pte->paddr = host >> PAGE_SHIFT; 
+		cur_pte->paddr = host >> PAGE_SHIFT;
 	}
 }
 
@@ -144,7 +144,7 @@ static int ept_setup_range(struct vmm *vmm, paddr_t host_start,
 	u64 needed_pt = needed_paging_structs(mmap_size, MB(2));
 	if (pdpt_off + needed_pd >= EPT_PTRS_PER_TABLE)
 		goto free_pdpt;
-	
+
 	struct ept_pde *ept_pd = alloc_pages(needed_pd);
 	if (ept_pd == NULL)
 		goto free_pdpt;
@@ -391,7 +391,7 @@ static void vmcs_write_vm_exec_controls(struct vmm *vmm)
 	vmcs_write_pin_based_ctrls(vmm, 0);
 
 	u64 proc_flags1 = VM_EXEC_USE_MSR_BITMAPS|VM_EXEC_ENABLE_PROC_CTLS2|
-			  VM_EXEC_CR3_LOAD_EXIT;
+			  VM_EXEC_CR3_LOAD_EXIT|VM_EXEC_UNCONDITIONAL_IO_EXIT;
 	u64 proc_flags2 = VM_EXEC_UNRESTRICTED_GUEST|VM_EXEC_ENABLE_EPT;
 	vmcs_write_proc_based_ctrls(vmm, proc_flags1);
 	vmcs_write_proc_based_ctrls2(vmm, proc_flags2);
