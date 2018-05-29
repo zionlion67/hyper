@@ -461,6 +461,7 @@ struct io_access_info {
 	};
 } __packed;
 
+#ifdef IO_DEBUG
 static void log_io_access(struct io_access_info *info)
 {
 	printf("I/O access: ");
@@ -481,6 +482,31 @@ static void log_io_access(struct io_access_info *info)
 
 	printf("%s %s%s 0x%x\n", rep, insn, size, info->port);
 }
+#else
+static void log_io_access(struct io_access_info *info __unused) {}
+#endif
+
+/* TODO remove magix */
+static inline int is_serial_access(const u16 port)
+{
+	return 0x3f8 <= port && port <= 0x3ff;
+}
+
+static inline int is_pic_access(const u16 port)
+{
+	return port == 0x20 || port == 0x21 || port == 0xa0 || port == 0xa1;
+}
+
+static inline int is_kbd_access(const u16 port)
+{
+	return port == 0x64 || port == 0x60;
+}
+
+static inline int is_pit_access(const u16 port)
+{
+	/* Only passthrough timer */
+	return port == 0x40;
+}
 
 static void io_access_handler(struct vmm *vmm __unused, struct vm_exit_ctx *ctx)
 {
@@ -490,24 +516,28 @@ static void io_access_handler(struct vmm *vmm __unused, struct vm_exit_ctx *ctx)
 
 	const u16 port = info.port;
 
-	if ((0x3ff < port || port < 0x3f8)
-	     && (port != 0x20 && port != 0x21 && port != 0xa0 && port != 0xa1)
-	     && (port != 0x64 && port != 0x60 && port != 0x70 && port != 0x71))
-	{
+	if (!is_serial_access(port) && !is_pic_access(port)
+	    && !is_kbd_access(port) && !is_pit_access(port)) {
 		log_io_access(&info);
-		//return;
+		return;
 	}
 
 	if (info.string || info.rep_insn)
 		panic("Unhandled I/O string instruction\n");
 
 	if (!info.in) {
-		if (info.access_sz == 0)
+		if (info.access_sz == 0) {
+			/* Hack to print on serial + VGA text */
+			if (port == 0x3f8) {
+				printf("%c", ctx->regs.rax & 0xff);
+				return;
+			}
 			outb(port, ctx->regs.rax & 0xff);
-		else if (info.access_sz == 1)
+		} else if (info.access_sz == 1) {
 			outw(port, ctx->regs.rax & 0xffff);
-		else
+		} else {
 			outl(port, ctx->regs.rax & 0xffffffff);
+		}
 	} else {
 		if (info.access_sz == 0)
 			ctx->regs.rax = inb(port);

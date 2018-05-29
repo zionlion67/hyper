@@ -4,11 +4,11 @@ KERNEL = $(OUT_DIR)/kernel
 ISO = hyper.iso
 
 QEMU=/usr/bin/qemu-system-x86_64
-#QEMU_OPTS= -drive id=disk,file=$(ISO),if=none \
+QEMU_OPTS= -drive id=disk,file=$(ISO),if=none \
 	     -device ahci,id=ahci		\
 	     -device ide-drive,drive=disk,bus=ahci.0 \
 	     -serial stdio -m 4G
-QEMU_OPTS=-cdrom $(ISO) -serial stdio -m 4G
+#QEMU_OPTS=-cdrom $(ISO) -serial stdio -m 4G
 
 INCLUDE_DIR = include/
 OBJS = src/boot.o 	\
@@ -54,7 +54,7 @@ LDSCRIPT = src/hyper.lds
 all: $(ISO)
 
 run: $(ISO)
-	$(QEMU) $(QEMU_OPTS) -machine isapc -cpu host -enable-kvm
+	$(QEMU) $(QEMU_OPTS) -cpu host -enable-kvm
 
 debug: CFLAGS+= -DDEBUG
 debug: $(ISO)
