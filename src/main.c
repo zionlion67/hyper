@@ -130,11 +130,13 @@ void hyper_main(u32 magic, u32 info_addr)
 	memory_init(mmap, va(mod->mod_end));
 	init_kmalloc();
 
+#if 0
 	pci_register_drivers();
 	struct pci_bus pci_bus = {
 		.num = 0
 	};
 	init_pci_bus(&pci_bus);
+#endif
 
 #ifndef DEBUG
 	if (!has_vmx_support())

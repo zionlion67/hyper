@@ -445,23 +445,7 @@ static void cr_access_handler(struct vmm *vmm, struct vm_exit_ctx *ctx)
 	}
 }
 
-struct io_access_info {
-	union {
-		struct {
-			u64	access_sz : 3;
-			u64	in        : 1;
-			u64	string    : 1;
-			u64	rep_insn  : 1;
-			u64	imm_op    : 1;
-			u64	res1      : 9;
-			u64	port      : 16;
-			u64	res2      : 32;
-		};
-		u64	quad_word;
-	};
-} __packed;
-
-#ifdef IO_DEBUG
+#ifdef DEBUG_IO
 static void log_io_access(struct io_access_info *info)
 {
 	printf("I/O access: ");
@@ -508,6 +492,31 @@ static inline int is_pit_access(const u16 port)
 	return port == 0x40;
 }
 
+typedef void (*io_handler_t)(struct x86_regs *, struct io_access_info *);
+struct ioport_dev_handler {
+	u16		begin;
+	u16		end;
+	io_handler_t 	handler;
+};
+
+#define IOPORT_HANDLER(Begin, End, Handler) \
+{ .begin = (Begin), .end = (End), .handler = (Handler), }
+
+extern void emulate_uart_8250(struct x86_regs *, struct io_access_info *);
+static struct ioport_dev_handler io_handlers[] = {
+	IOPORT_HANDLER(0x3f8, 0x3ff, emulate_uart_8250),
+};
+
+static io_handler_t ioport_has_emulator(u16 port)
+{
+	for (u16 i = 0; i < array_size(io_handlers); ++i) {
+		const struct ioport_dev_handler *dev_handler = &io_handlers[i];
+		if (dev_handler->begin <= port && port <= dev_handler->end)
+			return dev_handler->handler;
+	}
+	return NULL;
+}
+
 static void io_access_handler(struct vmm *vmm __unused, struct vm_exit_ctx *ctx)
 {
 	struct io_access_info info = {
@@ -516,8 +525,13 @@ static void io_access_handler(struct vmm *vmm __unused, struct vm_exit_ctx *ctx)
 
 	const u16 port = info.port;
 
-	if (!is_serial_access(port) && !is_pic_access(port)
-	    && !is_kbd_access(port) && !is_pit_access(port)) {
+	io_handler_t handler = ioport_has_emulator(port);
+	if (handler) {
+		handler(&ctx->regs, &info);
+		return;
+	}
+
+	if (!is_pic_access(port) && !is_kbd_access(port) && !is_pit_access(port)) {
 		log_io_access(&info);
 		return;
 	}
@@ -526,18 +540,12 @@ static void io_access_handler(struct vmm *vmm __unused, struct vm_exit_ctx *ctx)
 		panic("Unhandled I/O string instruction\n");
 
 	if (!info.in) {
-		if (info.access_sz == 0) {
-			/* Hack to print on serial + VGA text */
-			if (port == 0x3f8) {
-				printf("%c", ctx->regs.rax & 0xff);
-				return;
-			}
+		if (info.access_sz == 0)
 			outb(port, ctx->regs.rax & 0xff);
-		} else if (info.access_sz == 1) {
+		else if (info.access_sz == 1)
 			outw(port, ctx->regs.rax & 0xffff);
-		} else {
+		else
 			outl(port, ctx->regs.rax & 0xffffffff);
-		}
 	} else {
 		if (info.access_sz == 0)
 			ctx->regs.rax = inb(port);

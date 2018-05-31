@@ -321,6 +321,22 @@ struct vmm {
 	int (*setup_guest)(struct vmm *);
 };
 
+struct io_access_info {
+	union {
+		struct {
+			u64	access_sz : 3;
+			u64	in        : 1;
+			u64	string    : 1;
+			u64	rep_insn  : 1;
+			u64	imm_op    : 1;
+			u64	res1      : 9;
+			u64	port      : 16;
+			u64	res2      : 32;
+		};
+		u64	quad_word;
+	};
+} __packed;
+
 int has_vmx_support(void);
 int vmm_init(struct vmm *);
 void dump_guest_state(struct vmcs_guest_state *state);

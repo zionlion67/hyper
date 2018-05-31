@@ -24,7 +24,8 @@ OBJS = src/boot.o 	\
        src/vm_exit.o	\
        src/vmx_debug.o	\
        src/pci.o	\
-       src/pci_driver.o
+       src/pci_driver.o \
+       src/uart_8250.o
 
 LIBC_DIR=src/libc
 LIBC_OBJS=$(LIBC_DIR)/printf.o \
@@ -49,7 +50,7 @@ ASFLAGS += -g3
 LDFLAGS = -n -T $(LDSCRIPT) -nostdlib -static
 LDSCRIPT = src/hyper.lds
 
-.PHONY: all clean run debug
+.PHONY: all clean run debug debug_io
 
 all: $(ISO)
 
@@ -59,6 +60,9 @@ run: $(ISO)
 debug: CFLAGS+= -DDEBUG
 debug: $(ISO)
 	$(QEMU) $(QEMU_OPTS) -s -S
+
+debug_io: CFLAGS+=-DDEBUG_IO
+debug_io: $(ISO)
 
 $(ISO): $(OUT_DIR) $(KERNEL)
 	./tools/create_iso.sh $(realpath $(OUT_DIR)) $(ISO)

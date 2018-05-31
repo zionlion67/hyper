@@ -2,11 +2,13 @@
 #include <page_types.h>
 #include <string.h>
 
+#if 0
 static void serial_write(const char *s, u64 len)
 {
 	for (u64 i = 0; i < len; ++i)
 		outb(0x3f8, s[i]);
 }
+#endif
 
 struct screen {
 	char	*fb;
@@ -92,6 +94,6 @@ static void screen_write(struct screen *screen, const char *s, u64 len)
 
 void write(const char *s, u64 len)
 {
-	serial_write(s, len);
+	//serial_write(s, len);
 	screen_write(&vga_text, s, len);
 }
