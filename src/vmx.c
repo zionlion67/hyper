@@ -58,9 +58,9 @@ static int alloc_vmcs(struct vmm *vmm)
 	return 0;
 }
 
-static inline void release_vmcs(struct vmcs *vmcs)
+static inline void release_vmcs(struct vmm *vmm)
 {
-	release_huge_page(vmcs);
+	release_pages(vmm->vmx_on,  2);
 }
 
 /* Write back caching */
@@ -665,6 +665,6 @@ free_msr:
 free_host:
 	kfree((void *)(vmm->host_state.rsp - VM_EXIT_STACK_SIZE));
 free_vmcs:
-	release_vmcs(vmm->vmcs);
+	release_vmcs(vmm);
 	return 1;
 }
