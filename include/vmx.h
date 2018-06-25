@@ -4,6 +4,8 @@
 #include "x86.h"
 #include "ept.h"
 #include "vmx_guest.h"
+#include "vm_iodev.h"
+
 #include <stdio.h>
 
 #define NR_VMX_MSR 17
