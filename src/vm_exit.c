@@ -499,24 +499,6 @@ struct ioport_dev_handler {
 	io_handler_t 	handler;
 };
 
-#define IOPORT_HANDLER(Begin, End, Handler) \
-{ .begin = (Begin), .end = (End), .handler = (Handler), }
-
-extern void emulate_uart_8250(struct x86_regs *, struct io_access_info *);
-static struct ioport_dev_handler io_handlers[] = {
-	IOPORT_HANDLER(0x3f8, 0x3ff, emulate_uart_8250),
-};
-
-static io_handler_t ioport_has_emulator(u16 port)
-{
-	for (u16 i = 0; i < array_size(io_handlers); ++i) {
-		const struct ioport_dev_handler *dev_handler = &io_handlers[i];
-		if (dev_handler->begin <= port && port <= dev_handler->end)
-			return dev_handler->handler;
-	}
-	return NULL;
-}
-
 static void io_access_handler(struct vmm *vmm __unused, struct vm_exit_ctx *ctx)
 {
 	struct io_access_info info = {
@@ -524,10 +506,14 @@ static void io_access_handler(struct vmm *vmm __unused, struct vm_exit_ctx *ctx)
 	};
 
 	const u16 port = info.port;
+	const u16 byte_sz = info.access_sz + 1;
 
-	io_handler_t handler = ioport_has_emulator(port);
-	if (handler) {
-		handler(&ctx->regs, &info);
+	struct vm_iodev *dev = vm_iodev_bus_has_emulator(vmm->iodev_bus, port);
+	if (dev) {
+		if (info.in)
+			vm_iodev_read(dev, port, byte_sz, &ctx->regs.rax);
+		else
+			vm_iodev_write(dev, port, byte_sz, &ctx->regs.rax);
 		return;
 	}
 
@@ -539,6 +525,7 @@ static void io_access_handler(struct vmm *vmm __unused, struct vm_exit_ctx *ctx)
 	if (info.string || info.rep_insn)
 		panic("Unhandled I/O string instruction\n");
 
+	/* Passthroughs */
 	if (!info.in) {
 		if (info.access_sz == 0)
 			outb(port, ctx->regs.rax & 0xff);

@@ -5,6 +5,7 @@
 #include <vmx.h>
 
 struct uart_8250 {
+	struct vm_iodev iodev;
 	u8  thr;      /* Transmitter Holding Buffer */
 	u8  rbr;      /* Receiver buffer */
 	u8  dll;      /* Divisor Latch Low Byte */
@@ -25,7 +26,7 @@ struct uart_8250 {
 #define UART_LCR_DLAB		(1 << 7)
 #define UART_LSR_EMPTY_REG	(3 << 5)
 
-static struct uart_8250 uart_state;
+#define to_uart_8250(Iodev)	container_of(Iodev, struct uart_8250, iodev)
 
 /*
  * Here's the 'serial2vga' hack:
@@ -33,9 +34,8 @@ static struct uart_8250 uart_state;
  * with console=ttyS0 + trap on serial writes + display on text VGA.
  * This way, we can see if the guest boots when we're bare metal.
  */
-static void emulate_uart_8250_write(u8 val, u16 port)
+static void emulate_uart_8250_write(struct uart_8250 *uart, u8 val, u16 port)
 {
-	struct uart_8250 *uart = &uart_state;
 	switch (port & 7) {
 	case 0:
 		if (uart->lcr & UART_LCR_DLAB) {
@@ -68,10 +68,9 @@ static void emulate_uart_8250_write(u8 val, u16 port)
 	}
 }
 
-static u8 emulate_uart_8250_read(u16 port)
+static u8 emulate_uart_8250_read(struct uart_8250 *uart, u16 port)
 {
 	static char last_char = 0;
-	struct uart_8250 *uart = &uart_state;
 
 	switch (port & 7) {
 	case 0:
@@ -102,16 +101,38 @@ static u8 emulate_uart_8250_read(u16 port)
 	__builtin_unreachable();
 }
 
-void emulate_uart_8250(struct x86_regs *regs, struct io_access_info *info)
+static int uart_8250_read(struct vm_iodev *dev, gpa_t addr, u32 len,
+			  void *retval)
 {
-	if (info->access_sz != 0) {
-		printf("Unhandled serial access size: %d\n", info->access_sz);
-		printf("Direction: %s\n", info->in ? "in" : "out");
-		panic("");
-	}
+	if (len != 1)
+		panic("Unhandled i/o read access size: %u\n", len);
 
-	if (!info->in)
-		emulate_uart_8250_write(regs->rax & 0xff, info->port);
-	else
-		regs->rax = emulate_uart_8250_read(info->port);
+	struct uart_8250 *uart_state = to_uart_8250(dev);
+	*(u8 *)retval = emulate_uart_8250_read(uart_state, addr & 0xffff);
+	return 0;
 }
+
+static int uart_8250_write(struct vm_iodev *dev, gpa_t addr, u32 len,
+			   const void *val)
+{
+	if (len != 1)
+		panic("Unhandled i/o write access size: %u\n", len);
+
+	struct uart_8250 *uart_state = to_uart_8250(dev);
+	emulate_uart_8250_write(uart_state, *(u8 *)val, addr & 0xffff);
+	return 0;
+
+}
+
+static struct vm_iodev_ops uart_8250_iodev_ops = {
+	.read = uart_8250_read,
+	.write = uart_8250_write,
+};
+
+static struct uart_8250 uart_state = {
+	.iodev = {
+		.ops = &uart_8250_iodev_ops,
+	},
+};
+
+VM_IODEVICE(uart, 0x3f8, 0x3ff, &uart_state.iodev);

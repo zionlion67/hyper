@@ -628,8 +628,10 @@ int vmm_init(struct vmm *vmm)
 		goto free_host;
 
 	/* Didn't implement iodev_bus `free` yet */
-	if (init_iodev_bus(vmm))
+	if (init_iodev_bus(vmm)) {
+		printf("Failed to init emulated io devices\n");
 		goto free_msr;
+	}
 
 	vmm->setup_guest(vmm);
 	init_vm_exit_handlers(vmm);
