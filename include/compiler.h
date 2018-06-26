@@ -5,6 +5,7 @@
 #define __unused 	__attribute__((unused))
 #define __maybe_unused 	__unused
 #define __used		__attribute__((used))
+#define __section(name) __attribute__((section(name), used))
 
 #define __align(va, sz) ((va) & ~(sz - 1))
 #define __align_n(va, sz) (__align(va, sz) + sz)
