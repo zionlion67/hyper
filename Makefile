@@ -25,6 +25,7 @@ OBJS = src/boot.o 	\
        src/vmx_debug.o	\
        src/pci.o	\
        src/pci_driver.o \
+       src/vm_iodev.o	\
        src/uart_8250.o
 
 LIBC_DIR=src/libc

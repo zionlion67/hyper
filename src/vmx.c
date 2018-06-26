@@ -564,6 +564,15 @@ static int init_msr_bitmap(struct vmm *vmm)
 	return vmm->msr_bitmap == NULL;
 }
 
+static int init_iodev_bus(struct vmm *vmm)
+{
+	struct vm_iodev_bus *iodev_bus = alloc_init_iodev_bus();
+	if (iodev_bus == NULL)
+		return 1;
+	vmm->iodev_bus = iodev_bus;
+	return 0;
+}
+
 /* Hack to launch linux with correct reg state, this is really ugly. */
 static int launch_vm(struct vmm *vmm)
 {
@@ -617,6 +626,10 @@ int vmm_init(struct vmm *vmm)
 
 	if (init_msr_bitmap(vmm))
 		goto free_host;
+
+	/* Didn't implement iodev_bus `free` yet */
+	if (init_iodev_bus(vmm))
+		goto free_msr;
 
 	vmm->setup_guest(vmm);
 	init_vm_exit_handlers(vmm);

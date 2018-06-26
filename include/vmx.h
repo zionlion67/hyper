@@ -320,6 +320,8 @@ struct vmm {
 
 	u8 *msr_bitmap;
 
+	struct vm_iodev_bus *iodev_bus;
+
 	int (*setup_guest)(struct vmm *);
 };
 
