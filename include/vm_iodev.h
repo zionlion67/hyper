@@ -44,6 +44,14 @@ static inline int vm_iodev_reset(struct vm_iodev *dev)
 		return dev->ops->reset(dev);
 }
 
+#define VM_IODEVICE(Name, Start, End, Iodev) 	\
+	static __section("iodevices") __used	\
+	struct vm_iodev_range iodev_##Name = {	\
+		.start = (Start),		\
+		.end = (End),			\
+		.iodev = (Iodev),		\
+	};
+
 
 struct vm_iodev_bus_list {
 	struct vm_iodev_range *range;

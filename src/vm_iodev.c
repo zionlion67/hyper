@@ -1,5 +1,6 @@
-#include <vmx.h>
 #include <kmalloc.h>
+#include <panic.h>
+#include <vmx.h>
 
 #define IODEV_BUS_LIST_ENTRY(l)	list_entry((l), struct vm_iodev_bus_list, next)
 static struct vm_iodev *has_emulator(struct vm_iodev_bus *bus, gpa_t addr)
@@ -24,9 +25,14 @@ static int add_iodev(struct vm_iodev_bus *bus, struct vm_iodev_range *range)
 	return 0;
 }
 
+extern struct vm_iodev_range __start_iodevices[];
+extern struct vm_iodev_range __stop_iodevices[];
 static int iodev_bus_init(struct vm_iodev_bus *bus)
 {
-	(void)bus;
+	struct vm_iodev_range *r;
+	for (r = __start_iodevices; r < __stop_iodevices; ++r)
+		if (vm_iodev_bus_add_iodev(bus, r))
+			return 1;
 	return 0;
 }
 
