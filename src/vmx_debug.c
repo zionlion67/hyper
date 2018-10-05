@@ -3,16 +3,16 @@
 static void dump_control_regs(struct control_regs *regs)
 {
 	printf("Control registers:\n");
-	printf("CR0: 0x%lx\n", regs->cr0);
-	printf("CR3: 0x%lx\n", regs->cr3);
-	printf("CR4: 0x%lx\n\n", regs->cr4);
+	printf("CR0: %#llx\n", regs->cr0);
+	printf("CR3: %#llx\n", regs->cr3);
+	printf("CR4: %#llx\n\n", regs->cr4);
 }
 
 static void dump_seg_desc(struct segment_descriptor *desc, const char *name)
 {
-	printf("%s:\tSel: 0x%lx\tBase: 0x%lx\tLimit: 0x%x\n", name,
+	printf("%s:\tSel: %#llx\tBase: %#llx\tLimit: %#x\n", name,
 	       desc->selector, desc->base, desc->limit);
-	printf("%s:\ttype: 0x%x\ts: 0x%x\tdpl: 0x%x\tp: %u avl: 0x%x\tl: %u\t"
+	printf("%s:\ttype: %#x\ts: %#x\tdpl: %#x\tp: %u avl: %#x\tl: %u\t"
 	       "db: %u\tg: %u\tunusable: %u\n\n", name, desc->type, desc->s,
 	       desc->dpl, desc->p, desc->avl, desc->l, desc->db, desc->g,
 	       desc->unusable);
@@ -20,7 +20,7 @@ static void dump_seg_desc(struct segment_descriptor *desc, const char *name)
 
 static void dump_table_register(struct table_register *reg, const char *name)
 {
-	printf("%s:\nBase: 0x%lx\tLimit: 0x%x\n", name, reg->base, reg->limit);
+	printf("%s:\nBase: %#llx\tLimit: %#x\n", name, reg->base, reg->limit);
 }
 
 static void dump_guest_register_state(struct vmcs_guest_register_state *state)
@@ -44,7 +44,7 @@ static void dump_guest_register_state(struct vmcs_guest_register_state *state)
 	printf("\n");
 
 	printf("MSRs:\n");
-#define X(Msr) printf("ia32_%s:\t0x%lx\n", #Msr, state->msr.ia32_##Msr)
+#define X(Msr) printf("ia32_%s:\t%#llx\n", #Msr, state->msr.ia32_##Msr)
 	X(sysenter_cs);
 	X(fs_base);
 	X(gs_base);
@@ -59,10 +59,10 @@ static void dump_guest_register_state(struct vmcs_guest_register_state *state)
 	printf("\n");
 
 #if 0
-	printf("DR7:\t0x%lx\n", state->dr7);
-	printf("RFLAGS:\t0x%lx\n", state->regs.rflags);
-	printf("RSP:\t0x%lx\n", state->regs.rsp);
-	printf("RIP:\t0x%lx\n", state->regs.rip);
+	printf("DR7:\t%#llx\n", state->dr7);
+	printf("RFLAGS:\t%#llx\n", state->regs.rflags);
+	printf("RSP:\t%#llx\n", state->regs.rsp);
+	printf("RIP:\t%#llx\n", state->regs.rip);
 	printf("\n");
 #endif
 
@@ -74,7 +74,7 @@ void dump_guest_state(struct vmcs_guest_state *state)
 	dump_guest_register_state(&state->reg_state);
 
 	printf("Non-register state:\n");
-#define X(field) printf("%s:\t0x%lx\n", #field, state->field)
+#define X(field) printf("%s:\t%#llx\n", #field, state->field)
 	X(intr_state);
 	X(activity_state);
 	X(preempt_timer);
@@ -218,12 +218,12 @@ const char *get_vmcs_field_str(const enum vmcs_field field)
 
 void dump_x86_regs(struct x86_regs *regs)
 {
-#define X(x) (regs->x >> 32), (regs->x & 0xffffffff)
-	printf("RIP: 0x%x%x\tRSP: 0x%x%x\tRBP: 0x%x%x\tRFLAGS: 0x%x%x\n"
-	       "RSI: 0x%x%x\tRDI: 0x%x%x\tRAX: 0x%x%x\tRBX: 0x%x%x\n"
-	       "RCX: 0x%x%x\tRDX: 0x%x%x\tR8 : 0x%x%x\tR9 : 0x%x%x\n"
-	       "R10: 0x%x%x\tR11: 0x%x%x\tR12: 0x%x%x\tR13: 0x%x%x\n"
-	       "R14: 0x%x%x\tR15: 0x%x%x\n", X(rip), X(rsp), X(rbp), X(rflags),
+#define X(x) (regs->x)
+	printf("RIP: %#llx\tRSP: %#llx\tRBP: %#llx\tRFLAGS: %#llx\n"
+	       "RSI: %#llx\tRDI: %#llx\tRAX: %#llx\tRBX: %#llx\n"
+	       "RCX: %#llx\tRDX: %#llx\tR8 : %#llx\tR9 : %#llx\n"
+	       "R10: %#llx\tR11: %#llx\tR12: %#llx\tR13: %#llx\n"
+	       "R14: %#llx\tR15: %#llx\n", X(rip), X(rsp), X(rbp), X(rflags),
 	       X(rsi), X(rdi), X(rax), X(rbx), X(rcx), X(rdx), X(r8), X(r9),
 	       X(r10), X(r11), X(r12), X(r13), X(r14), X(r15));
 #undef X

@@ -121,7 +121,7 @@ static void dump_vm_exit_ctx(struct vm_exit_ctx *ctx)
 	printf("Guest registers:\n");
 	dump_x86_regs(&ctx->regs);
 
-	printf("qual: 0x%lx\n", ctx->exit_qual);
+	printf("qual: %#lx\n", ctx->exit_qual);
 
 }
 
@@ -174,12 +174,11 @@ static void ept_violation_handler(struct vmm *vmm __maybe_unused,
 	printf("\n");
 	dump_vm_exit_ctx(ctx);
 
-	printf("Guest linear addr: 0x%lx\n", guest_addr);
+	printf("Guest linear addr: %#lx\n", guest_addr);
 	__vmread(GUEST_PHYSICAL_ADDRESS, &guest_addr);
-	printf("Guest physical addr: 0x%lx\n", guest_addr);
+	printf("Guest physical addr: %#lx\n", guest_addr);
 	paddr_t host_paddr = ept_translate(vmm, guest_addr);
-	printf("Host physical addr: 0x%x%x\n",
-		host_paddr >> 32, host_paddr & 0xffffffff);
+	printf("Host physical addr: %#llx\n", host_paddr);
 	panic("");
 }
 
@@ -298,19 +297,19 @@ static void exception_handler(struct vmm *vmm, struct vm_exit_ctx *ctx)
 
 	if (info_vec.code_valid) {
 		__vmread(VM_EXIT_INTR_ERROR_CODE, &val);
-		printf("Error code: 0x%x%x\n", val >> 32, val & 0xffffffff);
+		printf("Error code: %#llxx\n", val);
 	}
 
 	dump_vm_exit_ctx(ctx);
 	dump_guest_state(&vmm->guest_state);
 
 	u64 cr2 = read_cr2();
-	printf("CR2: 0x%x%x\n", cr2 >> 32, cr2 & 0xfffffffff);
+	printf("CR2: %#llx\n", cr2);
 
 	panic("");
 }
 
-#define ACCESS_TYPE_MOV_TO_CR	0	
+#define ACCESS_TYPE_MOV_TO_CR	0
 #define ACCESS_TYPE_MOV_FROM_CR	1
 #define ACCESS_TYPE_CLTS	2
 #define ACCESS_TYPE_LMSW	3
@@ -464,7 +463,7 @@ static void log_io_access(struct io_access_info *info)
 	if (info->access_sz == 3)
 		size[size_idx]= 'l';
 
-	printf("%s %s%s 0x%x\n", rep, insn, size, info->port);
+	printf("%s %s%s %#x\n", rep, insn, size, info->port);
 }
 #else
 static void log_io_access(struct io_access_info *info __unused) {}

@@ -177,7 +177,7 @@ static const char *pci_dev_descr(struct pci_config_common *config)
 static void pci_print_config_common(struct pci_config_common *config)
 {
 	const char *desc = pci_dev_descr(config);
-	printf("VendorID: 0x%x\tDeviceID: 0x%x\tDevice: %s\n",
+	printf("VendorID: %#x\tDeviceID: %#x\tDevice: %s\n",
 			config->vendor_id, config->device_id,
 			desc == NULL ? "Unknown" : desc);
 }

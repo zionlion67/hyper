@@ -66,11 +66,9 @@ static void dump_memory_map(struct multiboot_tag_mmap *mmap)
 {
 	multiboot_memory_map_t *m = mmap->entries;
 	while ((u8 *)m < (u8 *)mmap + mmap->size) {
-		printf("base_addr=0x%x%x, length=0x%x%x type=%s\n",
-				m->addr >> 32,
-				m->addr & 0xffffffff,
-				m->len >> 32,
-				m->len & 0xffffffff,
+		printf("base_addr=%#lx, length=%#lx type=%s\n",
+				m->addr,
+				m->len,
 				multiboot_mmap_entry_types[m->type]);
 
 		m = (multiboot_memory_map_t *)((u8 *)m + mmap->entry_size);
@@ -156,7 +154,7 @@ void hyper_main(u32 magic, u32 info_addr)
 	};
 
 	vmm_init(&vmm);
-	
+
 	panic("VMM initialization failed\n");
 
 }

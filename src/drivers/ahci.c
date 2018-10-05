@@ -15,7 +15,7 @@ static int ahci_probe(struct device *dev)
 	struct pci_dev *pci_dev = to_pci_dev(dev);
 	printf("AHCI driver called\n");
 	for (u8 i = 0; i < PCI_NR_BARS; ++i)
-		printf("BAR %u: 0x%x\n", i, pci_dev->bars[i]);
+		printf("BAR %u: %#x\n", i, pci_dev->bars[i]);
 	return 0;
 }
 

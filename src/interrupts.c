@@ -83,7 +83,7 @@ static int add_gate(const u16 irq, u64 handler, u8 ist, u8 flags)
 static void dump_context(const struct irq_frame *f)
 {
 #define X(reg) \
-	printf(#reg": 0x%x%x\n", f->reg >> 32, f->reg & 0xffffffff);
+	printf(#reg": %#llx\n", f->reg);
 	X(rax);
 	X(rbx);
 	X(rcx);
@@ -96,9 +96,7 @@ static void dump_context(const struct irq_frame *f)
 	X(rflags);
 	X(error_code);
 #undef X
-	printf("CR2: ");
-	print64(read_cr2());
-	printf("\n");
+	printf("CR2: %#x\n", read_cr2());
 }
 
 static void default_irq_handler(struct irq_frame *frame)

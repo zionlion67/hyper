@@ -406,9 +406,9 @@ static inline void __vmwrite(enum vmcs_field field, u64 value)
 #ifdef DEBUG
 	const char *str = vmcs_field_str(field);
 	if (str)
-		printf("VMWRITE: %s = 0x%lx\n", str, value);
+		printf("VMWRITE: %s = %#lx\n", str, value);
 	else
-		printf("VMWRITE: 0x%x = 0x%lx\n", field, value);
+		printf("VMWRITE: %#x = %#lx\n", field, value);
 #endif
 	asm volatile goto ("vmwrite %1, %0\n\t"
 		      	   "jbe %l2\n\t"
@@ -419,7 +419,7 @@ static inline void __vmwrite(enum vmcs_field field, u64 value)
 			  );
 	return;
 fail:
-	printf("VMWRITE failed: field=0x%x\tval=0x%lx\n", field, value);
+	printf("VMWRITE failed: field=%#x\tval=%#lx\n", field, value);
 }
 
 static inline int __vmlaunch(void)
