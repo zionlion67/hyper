@@ -11,34 +11,14 @@ QEMU_OPTS= -drive id=disk,file=$(ISO),if=none \
 #QEMU_OPTS=-cdrom $(ISO) -serial stdio -m 4G
 
 INCLUDE_DIR = include/
-OBJS = src/boot.o 	\
-       src/main.o	\
-       src/write.o	\
-       src/isr.o	\
-       src/interrupts.o \
-       src/page_alloc.o \
-       src/kmalloc.o	\
-       src/tss.o	\
-       src/vmx.o	\
-       src/vmx_guest_test.o \
-       src/vm_exit.o	\
-       src/vmx_debug.o	\
-       src/pci.o	\
-       src/pci_driver.o \
-       src/uart_8250.o
+OBJS=$(addprefix src/, boot.o main.o write.o isr.o interrupts.o page_alloc.o  \
+                       kmalloc.o tss.o vmx.o vmx_guest_test.o vm_exit.o       \
+                       vmx_debug.o pci.o pci_driver.o uart_8250.o)
 
 LIBC_DIR=src/libc
-LIBC_OBJS=$(LIBC_DIR)/printf.o \
-	  $(LIBC_DIR)/strlen.o \
-	  $(LIBC_DIR)/strnlen.o \
-	  $(LIBC_DIR)/puts.o	\
-	  $(LIBC_DIR)/memset.o  \
-	  $(LIBC_DIR)/memcpy.o	\
-	  $(LIBC_DIR)/strcmp.o	\
-	  $(LIBC_DIR)/strncmp.o \
-	  $(LIBC_DIR)/strstr.o  \
-	  $(LIBC_DIR)/putchar.o
-
+LIBC_OBJS=$(addprefix src/libc/, printf.o strlen.o strnlen.o puts.o memset.o  \
+                                 memcpy.o strcmp.o strncmp.o strstr.o         \
+                                 putchar.o)
 DRIVER_DIR=src/drivers
 DRIVER_OBJS=$(DRIVER_DIR)/ahci.o
 
