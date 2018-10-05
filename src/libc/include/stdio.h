@@ -1,11 +1,11 @@
 #ifndef _STDIO_H_
 #define _STDIO_H_
 
+#include <types.h>
+
 int printf(const char *fmt, ...);
 int sprintf(char *buf, const char *fmt, ...);
 void puts(const char *s);
-
-#define print64(x) \
-	printf("0x%x%x", (x) >> 32, (x) & 0xffffffff)
+void write(const char *, u64);
 
 #endif

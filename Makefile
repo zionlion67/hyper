@@ -36,7 +36,8 @@ LIBC_OBJS=$(LIBC_DIR)/printf.o \
 	  $(LIBC_DIR)/memcpy.o	\
 	  $(LIBC_DIR)/strcmp.o	\
 	  $(LIBC_DIR)/strncmp.o \
-	  $(LIBC_DIR)/strstr.o
+	  $(LIBC_DIR)/strstr.o  \
+	  $(LIBC_DIR)/putchar.o
 
 DRIVER_DIR=src/drivers
 DRIVER_OBJS=$(DRIVER_DIR)/ahci.o
