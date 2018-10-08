@@ -47,12 +47,13 @@ static inline void vmm_read_vmx_msrs(struct vmm *vmm)
 		vmm->vmx_msr[i] = __readmsr(MSR_VMX_BASIC + i);
 }
 
+#define VMCS_NB_PAGES 2
 static int alloc_vmcs(struct vmm *vmm)
 {
-	void *mem = alloc_pages(2);
+	void *mem = alloc_pages(VMCS_NB_PAGES);
 	if (mem == NULL)
 		return 1;
-	memset(mem, 0, 2 * PAGE_SIZE);
+	memset(mem, 0, VMCS_NB_PAGES * PAGE_SIZE);
 	vmm->vmx_on = mem;
 	vmm->vmcs = (vaddr_t)mem + PAGE_SIZE;
 	return 0;
@@ -60,7 +61,7 @@ static int alloc_vmcs(struct vmm *vmm)
 
 static inline void release_vmcs(struct vmm *vmm)
 {
-	release_pages(vmm->vmx_on,  2);
+	release_pages(vmm->vmx_on, VMCS_NB_PAGES);
 }
 
 /* Write back caching */
