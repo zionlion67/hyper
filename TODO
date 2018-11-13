@@ -1,5 +1,0 @@
-- finish kmalloc/kfree
-
-- non physically contiguous multiple page mappings
-
-- read-only / NX page allocation
